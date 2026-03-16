@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUserId } from "@/lib/current-user"
 
 export const runtime = "nodejs"
 
@@ -142,6 +143,11 @@ function buildRecordKey(record: SalesRecordInput): string {
 export async function POST(req: NextRequest) {
 
     try {
+        const ownerId = await getCurrentUserId()
+        if (!ownerId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const data = await req.formData()
         const file = data.get("file")
 
@@ -229,6 +235,7 @@ export async function POST(req: NextRequest) {
         const uploadUniqueRecords = Array.from(uploadUniqueMap.values())
 
         const existing = await prisma.salesData.findMany({
+            where: { ownerId },
             select: {
                 region: true,
                 salesManager: true,
@@ -285,30 +292,30 @@ export async function POST(req: NextRequest) {
         const chunkSize = 500
 
         for (let i = 0; i < records.length; i += chunkSize) {
-            const chunk = records.slice(i, i + chunkSize)
+            const chunk = records.slice(i, i + chunkSize).map((record) => ({ ...record, ownerId }))
             await prisma.salesData.createMany({ data: chunk })
         }
 
         await Promise.all([
             ...uniqueRegions.map((name) =>
                 prisma.region.upsert({
-                    where: { name },
+                    where: { ownerId_name: { ownerId, name } },
                     update: {},
-                    create: { name },
+                    create: { ownerId, name },
                 })
             ),
             ...uniqueSalesManagers.map((name) =>
                 prisma.salesManager.upsert({
-                    where: { name },
+                    where: { ownerId_name: { ownerId, name } },
                     update: {},
-                    create: { name },
+                    create: { ownerId, name },
                 })
             ),
             ...uniqueVendors.map((name) =>
                 prisma.vendor.upsert({
-                    where: { name },
+                    where: { ownerId_name: { ownerId, name } },
                     update: {},
-                    create: { name },
+                    create: { ownerId, name },
                 })
             ),
         ])
@@ -326,6 +333,7 @@ export async function POST(req: NextRequest) {
             skippedExisting,
         })
     } catch (error) {
+        console.error("/api/import failed", error)
         return NextResponse.json(
             {
                 error: "Failed to import workbook",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUserId } from "@/lib/current-user"
 
 type SalesPayload = {
     region: string
@@ -59,11 +60,23 @@ function parsePayload(input: unknown): SalesPayload {
     return payload
 }
 
-async function syncCatalogs(payload: SalesPayload) {
+async function syncCatalogs(ownerId: number, payload: SalesPayload) {
     await Promise.all([
-        prisma.region.upsert({ where: { name: payload.region }, update: {}, create: { name: payload.region } }),
-        prisma.salesManager.upsert({ where: { name: payload.salesManager }, update: {}, create: { name: payload.salesManager } }),
-        prisma.vendor.upsert({ where: { name: payload.vendor }, update: {}, create: { name: payload.vendor } }),
+        prisma.region.upsert({
+            where: { ownerId_name: { ownerId, name: payload.region } },
+            update: {},
+            create: { ownerId, name: payload.region },
+        }),
+        prisma.salesManager.upsert({
+            where: { ownerId_name: { ownerId, name: payload.salesManager } },
+            update: {},
+            create: { ownerId, name: payload.salesManager },
+        }),
+        prisma.vendor.upsert({
+            where: { ownerId_name: { ownerId, name: payload.vendor } },
+            update: {},
+            create: { ownerId, name: payload.vendor },
+        }),
     ])
 }
 
@@ -72,6 +85,11 @@ type RouteContext = {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+    const ownerId = await getCurrentUserId()
+    if (!ownerId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await context.params
     const numericId = Number(id)
 
@@ -81,9 +99,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     try {
         const payload = parsePayload(await request.json())
-        await syncCatalogs(payload)
+        await syncCatalogs(ownerId, payload)
         const row = await prisma.salesData.update({
-            where: { id: numericId },
+            where: { id: numericId, ownerId },
             data: payload,
         })
         return NextResponse.json({ row })
@@ -94,6 +112,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
+    const ownerId = await getCurrentUserId()
+    if (!ownerId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await context.params
     const numericId = Number(id)
 
@@ -102,7 +125,10 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
     }
 
     try {
-        await prisma.salesData.delete({ where: { id: numericId } })
+        const result = await prisma.salesData.deleteMany({ where: { id: numericId, ownerId } })
+        if (result.count === 0) {
+            return NextResponse.json({ error: "Row not found" }, { status: 404 })
+        }
         return NextResponse.json({ success: true })
     } catch {
         return NextResponse.json({ error: "Failed to delete row" }, { status: 400 })

@@ -18,27 +18,50 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  salesData     SalesData[]
+  regions       Region[]
+  salesManagers SalesManager[]
+  vendors       Vendor[]
 }
 
 model Region {
   id        Int      @id @default(autoincrement())
-  name      String   @unique
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
 }
 
 model SalesManager {
   id        Int      @id @default(autoincrement())
-  name      String   @unique
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
 }
 
 model Vendor {
   id        Int      @id @default(autoincrement())
-  name      String   @unique
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
 }
 
 model SalesData {
@@ -46,6 +69,9 @@ model SalesData {
   region        String
   salesManager  String
   vendor        String
+
+  ownerId       Int
+  owner         User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   yearTarget    Float
   quarterTarget Float
@@ -65,4 +91,9 @@ model SalesData {
 
   percentQ1     Float?
   balanceQ1     Float?
+
+  @@index([ownerId])
+  @@index([ownerId, region])
+  @@index([ownerId, salesManager])
+  @@index([ownerId, vendor])
 }

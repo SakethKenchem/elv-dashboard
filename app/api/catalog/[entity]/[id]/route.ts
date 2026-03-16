@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isCatalogEntity } from "@/lib/catalog"
 import { deleteCatalogItem, updateCatalogItem } from "@/lib/catalog-server"
+import { getCurrentUserId } from "@/lib/current-user"
 
 type RouteContext = {
     params: Promise<{ entity: string; id: string }>
@@ -17,6 +18,11 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
     const { entity, id } = await context.params
+    const userId = await getCurrentUserId()
+
+    if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     if (!isCatalogEntity(entity)) {
         return NextResponse.json({ error: "Unknown catalog entity" }, { status: 404 })
@@ -29,7 +35,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     try {
         const body = await request.json()
-        const item = await updateCatalogItem(entity, numericId, String(body.name ?? ""))
+        const item = await updateCatalogItem(entity, userId, numericId, String(body.name ?? ""))
         return NextResponse.json({ item })
     } catch (error) {
         if (isUniqueConstraintError(error)) {
@@ -44,6 +50,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
     const { entity, id } = await context.params
+    const userId = await getCurrentUserId()
+
+    if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     if (!isCatalogEntity(entity)) {
         return NextResponse.json({ error: "Unknown catalog entity" }, { status: 404 })
@@ -55,7 +66,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
     }
 
     try {
-        const result = await deleteCatalogItem(entity, numericId)
+        const result = await deleteCatalogItem(entity, userId, numericId)
         return NextResponse.json(result)
     } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to delete item"

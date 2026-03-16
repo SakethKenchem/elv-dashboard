@@ -1,14 +1,23 @@
 import { AppShell } from "@/components/app-shell"
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUserId } from "@/lib/current-user"
+import { redirect } from "next/navigation"
 
 function currency(value: number): string {
     return `$${value.toLocaleString()}`
 }
 
 export default async function RegionsDirectoryPage() {
+    const ownerId = await getCurrentUserId()
+
+    if (!ownerId) {
+        redirect("/login")
+    }
+
     const rows = await prisma.salesData.groupBy({
         by: ["region"],
+        where: { ownerId },
         _sum: {
             quarterTarget: true,
             totalAchieved: true,

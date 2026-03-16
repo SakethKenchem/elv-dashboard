@@ -1,14 +1,21 @@
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { getCurrentUserId } from "@/lib/current-user"
 
 export async function POST() {
 
+  const ownerId = await getCurrentUserId()
+  if (!ownerId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const data = await prisma.salesData.findMany({
+    where: { ownerId },
     orderBy: { id: "asc" }
   })
 
   const seen = new Set()
-  const duplicates:number[] = []
+  const duplicates: number[] = []
 
   for (const row of data) {
 
@@ -29,8 +36,9 @@ export async function POST() {
   if (duplicates.length > 0) {
 
     await prisma.salesData.deleteMany({
-      where:{
-        id:{ in:duplicates }
+      where: {
+        ownerId,
+        id: { in: duplicates }
       }
     })
 

@@ -86,6 +86,22 @@ export const authOptions: NextAuthOptions = {
         strategy: "jwt",
         maxAge: 60 * 60 * 8,
     },
+    callbacks: {
+        async jwt({ token, user }) {
+            if (user?.id) {
+                token.userId = Number(user.id)
+            }
+
+            return token
+        },
+        async session({ session, token }) {
+            if (session.user && typeof token.userId === "number") {
+                session.user.id = String(token.userId)
+            }
+
+            return session
+        },
+    },
     secret: AUTH_SECRET,
     pages: {
         signIn: "/login",

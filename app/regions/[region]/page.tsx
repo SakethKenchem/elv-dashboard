@@ -2,6 +2,8 @@ import { AppShell } from "@/components/app-shell"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUserId } from "@/lib/current-user"
+import { redirect } from "next/navigation"
 
 type RegionPageProps = {
     params: Promise<{ region: string }>
@@ -16,11 +18,17 @@ function percent(value: number | null): string {
 }
 
 export default async function RegionDetailsPage({ params }: RegionPageProps) {
+    const ownerId = await getCurrentUserId()
+
+    if (!ownerId) {
+        redirect("/login")
+    }
+
     const { region } = await params
     const regionName = decodeURIComponent(region)
 
     const rows = await prisma.salesData.findMany({
-        where: { region: regionName },
+        where: { ownerId, region: regionName },
         orderBy: [
             { salesManager: "asc" },
             { vendor: "asc" },

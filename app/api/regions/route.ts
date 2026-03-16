@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { getCurrentUserId } from "@/lib/current-user"
 
 type RegionAggregate = {
   yearlyTarget: number
@@ -9,7 +10,14 @@ type RegionAggregate = {
 
 export async function GET() {
 
-  const data = await prisma.salesData.findMany()
+  const ownerId = await getCurrentUserId()
+  if (!ownerId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const data = await prisma.salesData.findMany({
+    where: { ownerId }
+  })
 
   const regions: Record<string, RegionAggregate> = {}
 

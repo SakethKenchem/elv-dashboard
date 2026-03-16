@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUserId } from "@/lib/current-user"
 
 type SalesPayload = {
     region: string
@@ -74,15 +75,32 @@ function parsePayload(input: unknown): SalesPayload {
     return payload
 }
 
-async function syncCatalogs(payload: SalesPayload) {
+async function syncCatalogs(ownerId: number, payload: SalesPayload) {
     await Promise.all([
-        prisma.region.upsert({ where: { name: payload.region }, update: {}, create: { name: payload.region } }),
-        prisma.salesManager.upsert({ where: { name: payload.salesManager }, update: {}, create: { name: payload.salesManager } }),
-        prisma.vendor.upsert({ where: { name: payload.vendor }, update: {}, create: { name: payload.vendor } }),
+        prisma.region.upsert({
+            where: { ownerId_name: { ownerId, name: payload.region } },
+            update: {},
+            create: { ownerId, name: payload.region },
+        }),
+        prisma.salesManager.upsert({
+            where: { ownerId_name: { ownerId, name: payload.salesManager } },
+            update: {},
+            create: { ownerId, name: payload.salesManager },
+        }),
+        prisma.vendor.upsert({
+            where: { ownerId_name: { ownerId, name: payload.vendor } },
+            update: {},
+            create: { ownerId, name: payload.vendor },
+        }),
     ])
 }
 
 export async function GET(request: NextRequest) {
+    const ownerId = await getCurrentUserId()
+    if (!ownerId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const region = searchParams.get("region")?.trim()
     const salesManager = searchParams.get("salesManager")?.trim()
@@ -94,6 +112,7 @@ export async function GET(request: NextRequest) {
     const sortDir = getSortDirection(searchParams.get("sortDir"))
 
     const where = {
+        ownerId,
         ...(region ? { region } : {}),
         ...(salesManager ? { salesManager } : {}),
         ...(vendor ? { vendor } : {}),
@@ -147,9 +166,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        const ownerId = await getCurrentUserId()
+        if (!ownerId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const payload = parsePayload(await request.json())
-        await syncCatalogs(payload)
-        const row = await prisma.salesData.create({ data: payload })
+        await syncCatalogs(ownerId, payload)
+        const row = await prisma.salesData.create({ data: { ...payload, ownerId } })
         return NextResponse.json({ row }, { status: 201 })
     } catch (error) {
         return NextResponse.json(
@@ -161,6 +185,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
     try {
+        const ownerId = await getCurrentUserId()
+        if (!ownerId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const body = (await request.json()) as { ids?: number[] }
         const ids = Array.isArray(body.ids) ? body.ids.filter((id) => Number.isInteger(id)) : []
 
@@ -169,7 +198,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         const result = await prisma.salesData.deleteMany({
-            where: { id: { in: ids } },
+            where: { ownerId, id: { in: ids } },
         })
 
         return NextResponse.json({ deleted: result.count })

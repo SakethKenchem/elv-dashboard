@@ -11,8 +11,24 @@ type ActionState = {
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null)
-  const [busy, setBusy] = useState<"upload" | "delete" | "dedupe" | null>(null)
+  const [busy, setBusy] = useState<"upload" | "delete" | "dedupe" | "export" | null>(null)
   const [status, setStatus] = useState<ActionState>(null)
+
+  const readApiPayload = async (res: Response): Promise<Record<string, unknown>> => {
+    const contentType = res.headers.get("content-type") ?? ""
+
+    if (contentType.toLowerCase().includes("application/json")) {
+      try {
+        const payload = (await res.json()) as Record<string, unknown>
+        return payload
+      } catch {
+        return {}
+      }
+    }
+
+    const text = await res.text()
+    return text ? { error: text } : {}
+  }
 
   const upload = async () => {
     if (!file) {
@@ -30,10 +46,10 @@ export default function ImportPage() {
         method: "POST",
         body: form,
       })
-      const payload = await res.json()
+      const payload = await readApiPayload(res)
 
       if (!res.ok) {
-        throw new Error(payload.error ?? "Upload failed")
+        throw new Error(String(payload.error ?? "Upload failed"))
       }
 
       setStatus({
@@ -61,10 +77,10 @@ export default function ImportPage() {
       const res = await fetch("/api/delete-all", {
         method: "DELETE",
       })
-      const payload = await res.json()
+      const payload = await readApiPayload(res)
 
       if (!res.ok) {
-        throw new Error(payload.error ?? "Failed to delete data")
+        throw new Error(String(payload.error ?? "Failed to delete data"))
       }
 
       setStatus({ type: "success", message: "All records deleted." })
@@ -78,6 +94,33 @@ export default function ImportPage() {
     }
   }
 
+  const exportData = async () => {
+    try {
+      setBusy("export")
+      setStatus(null)
+      const res = await fetch("/api/export")
+      if (!res.ok) {
+        const payload = await readApiPayload(res)
+        throw new Error(String(payload.error ?? "Export failed"))
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `elv-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      setStatus({ type: "success", message: "Export downloaded successfully." })
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "Export failed",
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const dedupe = async () => {
     try {
       setBusy("dedupe")
@@ -85,15 +128,15 @@ export default function ImportPage() {
       const res = await fetch("/api/deduplicate", {
         method: "POST",
       })
-      const data = await res.json()
+      const data = await readApiPayload(res)
 
       if (!res.ok) {
-        throw new Error(data.error ?? "Failed to deduplicate records")
+        throw new Error(String(data.error ?? "Failed to deduplicate records"))
       }
 
       setStatus({
         type: "success",
-        message: `Removed ${data.removed ?? 0} duplicate rows.`,
+        message: `Removed ${Number(data.removed ?? 0)} duplicate rows.`,
       })
     } catch (error) {
       setStatus({
@@ -145,7 +188,15 @@ export default function ImportPage() {
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <button
+            onClick={exportData}
+            disabled={busy !== null}
+            className="rounded-xl bg-[#1e5fa8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#174d8a] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy === "export" ? "Exporting..." : "Download as Excel"}
+          </button>
+
           <button
             onClick={deleteAll}
             disabled={busy !== null}
