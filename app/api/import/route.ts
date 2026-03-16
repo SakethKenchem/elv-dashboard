@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"
+import {
+    MONTHS,
+    normalizeMonth,
+    normalizeQuarter,
+    quarterMonths,
+    sanitizeName,
+    toMonthMap,
+} from "@/lib/sales-manager-metrics"
 
 export const runtime = "nodejs"
 
@@ -24,6 +32,116 @@ type SalesRecordInput = {
     commitMar: number
     percentQ1: number
     balanceQ1: number
+}
+
+type SalesManagerPlanInput = {
+    name: string
+    region: string
+    vendor: string
+    yearTarget: number
+    quarterTarget: number
+    monthTarget: number
+    selectedQuarter: 1 | 2 | 3 | 4
+    monthlyTargets: Record<string, number>
+    monthlyAchieved: Record<string, number>
+    commitMonth: string | null
+    commitAmount: number
+}
+
+function quarterFromMonth(month: string): 1 | 2 | 3 | 4 {
+    const normalized = normalizeMonth(month)
+    const index = MONTHS.indexOf(normalized)
+    if (index < 3) return 1
+    if (index < 6) return 2
+    if (index < 9) return 3
+    return 4
+}
+
+function mergePlan(base: SalesManagerPlanInput, override: SalesManagerPlanInput): SalesManagerPlanInput {
+    const mergedTargets = toMonthMap(base.monthlyTargets)
+    const mergedAchieved = toMonthMap(base.monthlyAchieved)
+    const overrideTargets = toMonthMap(override.monthlyTargets)
+    const overrideAchieved = toMonthMap(override.monthlyAchieved)
+
+    for (const month of MONTHS) {
+        if (Number(overrideTargets[month] ?? 0) !== 0) {
+            mergedTargets[month] = Number(overrideTargets[month] ?? 0)
+        }
+        if (Number(overrideAchieved[month] ?? 0) !== 0) {
+            mergedAchieved[month] = Number(overrideAchieved[month] ?? 0)
+        }
+    }
+
+    return {
+        ...base,
+        ...override,
+        region: override.region || base.region,
+        vendor: override.vendor || base.vendor,
+        yearTarget: Number(override.yearTarget || base.yearTarget),
+        quarterTarget: Number(override.quarterTarget || base.quarterTarget),
+        monthTarget: Number(override.monthTarget || base.monthTarget),
+        selectedQuarter: normalizeQuarter(override.selectedQuarter || base.selectedQuarter),
+        commitMonth: override.commitMonth || base.commitMonth,
+        commitAmount: Number(override.commitAmount || base.commitAmount),
+        monthlyTargets: mergedTargets,
+        monthlyAchieved: mergedAchieved,
+    }
+}
+
+function deriveSalesManagerPlans(records: SalesRecordInput[]): SalesManagerPlanInput[] {
+    const plans = new Map<string, SalesManagerPlanInput>()
+
+    for (const record of records) {
+        const name = sanitizeName(record.salesManager)
+        if (!name) {
+            continue
+        }
+
+        const existing = plans.get(name)
+        const selectedQuarter = quarterFromMonth(record.month1Name)
+        const monthsInQuarter = quarterMonths(selectedQuarter)
+        const month1 = normalizeMonth(record.month1Name)
+        const month2 = normalizeMonth(record.month2Name)
+        const month3 = normalizeMonth(record.month3Name)
+
+        const monthlyTargets = existing ? toMonthMap(existing.monthlyTargets) : toMonthMap({})
+        const monthlyAchieved = existing ? toMonthMap(existing.monthlyAchieved) : toMonthMap({})
+
+        const perMonthTarget = Number(record.monthTarget ?? 0)
+        monthlyTargets[month1] += perMonthTarget
+        monthlyTargets[month2] += perMonthTarget
+        monthlyTargets[month3] += perMonthTarget
+
+        monthlyAchieved[month1] += Number(record.jan ?? 0)
+        monthlyAchieved[month2] += Number(record.feb ?? 0)
+        monthlyAchieved[month3] += Number(record.mar ?? 0)
+
+        plans.set(name, {
+            name,
+            region: sanitizeName(record.region) || existing?.region || "",
+            vendor: sanitizeName(record.vendor) || existing?.vendor || "",
+            yearTarget: Number(existing?.yearTarget ?? 0) + Number(record.yearTarget ?? 0),
+            quarterTarget: Number(existing?.quarterTarget ?? 0) + Number(record.quarterTarget ?? 0),
+            monthTarget: Number(existing?.monthTarget ?? 0) + Number(record.monthTarget ?? 0),
+            selectedQuarter,
+            monthlyTargets,
+            monthlyAchieved,
+            commitMonth: normalizeMonth(record.commitMonth),
+            commitAmount: Number(existing?.commitAmount ?? 0) + Number(record.commitMar ?? 0),
+        })
+
+        // Keep selected quarter aligned with row data whenever possible.
+        if (plans.get(name)) {
+            plans.get(name)!.selectedQuarter = normalizeQuarter(selectedQuarter)
+            // Keep quarter-target month keys hydrated in case month headers are abbreviated.
+            for (const month of monthsInQuarter) {
+                plans.get(name)!.monthlyTargets[month] += 0
+                plans.get(name)!.monthlyAchieved[month] += 0
+            }
+        }
+    }
+
+    return Array.from(plans.values())
 }
 
 function parseNumber(value: unknown): number {
@@ -140,6 +258,55 @@ function buildRecordKey(record: SalesRecordInput): string {
     ].join("|")
 }
 
+function detectSalesManagerPlanSheet(workbook: XLSX.WorkBook): string | null {
+    const exact = workbook.SheetNames.find((name) => normalizeKey(name) === "sales manager plans")
+    if (exact) {
+        return exact
+    }
+
+    const fallback = workbook.SheetNames.find((name) => normalizeKey(name).includes("sales manager"))
+    return fallback ?? null
+}
+
+function parseSalesManagerPlans(rows: JsonRow[]): SalesManagerPlanInput[] {
+    const parsed: SalesManagerPlanInput[] = []
+
+    for (const row of rows) {
+        const name = sanitizeName(
+            getCellValue(row, ["Name", "Sales Manager", "SalesManager", "Sales Manager Name", "Manager"])
+        )
+        if (!name) {
+            continue
+        }
+
+        const monthlyTargets = toMonthMap({})
+        const monthlyAchieved = toMonthMap({})
+
+        for (const month of MONTHS) {
+            monthlyTargets[month] = parseNumber(getCellValue(row, [`Target ${month}`, `${month} Target`]))
+            monthlyAchieved[month] = parseNumber(getCellValue(row, [`Achieved ${month}`, `${month} Achieved`]))
+        }
+
+        parsed.push({
+            name,
+            region: sanitizeName(getCellValue(row, ["Region"])),
+            vendor: sanitizeName(getCellValue(row, ["Vendor"])),
+            yearTarget: parseNumber(getCellValue(row, ["Yearly Target", "YR TGT"])),
+            quarterTarget: parseNumber(getCellValue(row, ["Quarterly Target", "QTR TGT"])),
+            monthTarget: parseNumber(getCellValue(row, ["Monthly Target", "MON TGT"])),
+            selectedQuarter: normalizeQuarter(getCellValue(row, ["Quarter", "Selected Quarter"])),
+            monthlyTargets,
+            monthlyAchieved,
+            commitMonth: sanitizeName(getCellValue(row, ["Commit Month", "Commit"]))
+                ? normalizeMonth(getCellValue(row, ["Commit Month", "Commit"]))
+                : null,
+            commitAmount: parseNumber(getCellValue(row, ["Commit Amount", "Commitment Amount"])),
+        })
+    }
+
+    return parsed
+}
+
 export async function POST(req: NextRequest) {
 
     try {
@@ -176,6 +343,16 @@ export async function POST(req: NextRequest) {
             raw: true,
         })
 
+        const salesManagerPlanSheetName = detectSalesManagerPlanSheet(workbook)
+        const salesManagerPlanRows = salesManagerPlanSheetName
+            ? XLSX.utils.sheet_to_json<JsonRow>(workbook.Sheets[salesManagerPlanSheetName], {
+                defval: null,
+                raw: true,
+            })
+            : []
+
+        const salesManagerPlans = parseSalesManagerPlans(salesManagerPlanRows)
+
         if (rows.length === 0) {
             return NextResponse.json(
                 { error: "The selected sheet is empty" },
@@ -191,8 +368,10 @@ export async function POST(req: NextRequest) {
         const mappedRecords = rows
             .map((row): SalesRecordInput | null => {
                 const region = parseText(getCellValue(row, ["Region"]))
-                const salesManager = parseText(getCellValue(row, ["Sales Manager", "SalesManager"]))
-                const vendor = parseText(getCellValue(row, ["Vendor"]))
+                const salesManager = parseText(
+                    getCellValue(row, ["Sales Manager", "SalesManager", "Sales Managers", "Manager"])
+                )
+                const vendor = parseText(getCellValue(row, ["Vendor", "Vendors"]))
                 const commitHeaderKey =
                     getCellKey(row, ["Commit - MAR", "Commit MAR", "Commit"]) ??
                     Object.keys(row).find((key) => normalizeKey(key).startsWith("commit -")) ??
@@ -285,9 +464,22 @@ export async function POST(req: NextRequest) {
             (record) => !existingKeys.has(buildRecordKey(record))
         )
 
-        const uniqueRegions = [...new Set(mappedRecords.map((record) => record.region))]
-        const uniqueSalesManagers = [...new Set(mappedRecords.map((record) => record.salesManager))]
-        const uniqueVendors = [...new Set(mappedRecords.map((record) => record.vendor))]
+        const uniqueRegions = [...new Set(mappedRecords.map((record) => sanitizeName(record.region)).filter(Boolean))]
+        const uniqueVendors = [...new Set(mappedRecords.map((record) => sanitizeName(record.vendor)).filter(Boolean))]
+        const derivedSalesManagerPlans = deriveSalesManagerPlans(uploadUniqueRecords)
+
+        const mergedPlansMap = new Map<string, SalesManagerPlanInput>()
+        for (const derived of derivedSalesManagerPlans) {
+            mergedPlansMap.set(derived.name, derived)
+        }
+        for (const uploadedPlan of salesManagerPlans) {
+            const current = mergedPlansMap.get(uploadedPlan.name)
+            mergedPlansMap.set(
+                uploadedPlan.name,
+                current ? mergePlan(current, uploadedPlan) : uploadedPlan
+            )
+        }
+        const plansToUpsert = Array.from(mergedPlansMap.values())
 
         const chunkSize = 500
 
@@ -304,18 +496,42 @@ export async function POST(req: NextRequest) {
                     create: { ownerId, name },
                 })
             ),
-            ...uniqueSalesManagers.map((name) =>
-                prisma.salesManager.upsert({
-                    where: { ownerId_name: { ownerId, name } },
-                    update: {},
-                    create: { ownerId, name },
-                })
-            ),
             ...uniqueVendors.map((name) =>
                 prisma.vendor.upsert({
                     where: { ownerId_name: { ownerId, name } },
                     update: {},
                     create: { ownerId, name },
+                })
+            ),
+            ...plansToUpsert.map((plan) =>
+                prisma.salesManager.upsert({
+                    where: { ownerId_name: { ownerId, name: plan.name } },
+                    update: {
+                        region: plan.region || null,
+                        vendor: plan.vendor || null,
+                        yearTarget: plan.yearTarget,
+                        quarterTarget: plan.quarterTarget,
+                        monthTarget: plan.monthTarget,
+                        selectedQuarter: plan.selectedQuarter,
+                        monthlyTargets: plan.monthlyTargets,
+                        monthlyAchieved: plan.monthlyAchieved,
+                        commitMonth: plan.commitMonth,
+                        commitAmount: plan.commitAmount,
+                    },
+                    create: {
+                        ownerId,
+                        name: plan.name,
+                        region: plan.region || null,
+                        vendor: plan.vendor || null,
+                        yearTarget: plan.yearTarget,
+                        quarterTarget: plan.quarterTarget,
+                        monthTarget: plan.monthTarget,
+                        selectedQuarter: plan.selectedQuarter,
+                        monthlyTargets: plan.monthlyTargets,
+                        monthlyAchieved: plan.monthlyAchieved,
+                        commitMonth: plan.commitMonth,
+                        commitAmount: plan.commitAmount,
+                    },
                 })
             ),
         ])
@@ -328,6 +544,7 @@ export async function POST(req: NextRequest) {
             success: true,
             imported: records.length,
             sheet: selectedSheetName,
+            importedSalesManagerPlans: plansToUpsert.length,
             skippedInvalid,
             skippedWithinUpload,
             skippedExisting,

@@ -6,8 +6,8 @@ export const catalogConfig = {
         activeItem: "regions",
     },
     "sales-managers": {
-        title: "Sales Managers",
-        singular: "sales manager",
+        title: "Sales Manager Plans",
+        singular: "sales manager plan",
         field: "salesManager",
         activeItem: "sales-managers",
     },

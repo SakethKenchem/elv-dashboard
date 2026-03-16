@@ -1,31 +1,21 @@
 import { AppShell } from "../../components/app-shell"
-import { SalesDataManager } from "../../components/sales-data-manager"
+import { SalesManagerCrud } from "@/components/sales-manager-crud"
 
 type RecordsPageProps = {
-    searchParams: Promise<{
-        region?: string
-        salesManager?: string
-        vendor?: string
-    }>
+    searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
-export default async function RecordsPage({ searchParams }: RecordsPageProps) {
-    const params = await searchParams
+export default async function RecordsPage({ searchParams: _searchParams }: RecordsPageProps) {
+    await _searchParams
 
     return (
         <AppShell
             activeItem="records"
-            eyebrow="Sales Data"
-            title="Sales record workspace"
-            description="Filter, create, edit, and delete imported sales rows while keeping region, manager, and vendor master data in sync."
+            eyebrow="Sales Managers"
+            title="Sales Manager Hub"
+            description="One place for each sales manager plan, targets, commitments, achievements, and linked sales performance."
         >
-            <SalesDataManager
-                initialFilters={{
-                    region: params.region ?? "",
-                    salesManager: params.salesManager ?? "",
-                    vendor: params.vendor ?? "",
-                }}
-            />
+            <SalesManagerCrud />
         </AppShell>
     )
 }

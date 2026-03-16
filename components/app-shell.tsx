@@ -14,9 +14,8 @@ type AppShellProps = {
 const navItems = [
     { key: "dashboard", label: "Dashboard", href: "/dashboard" },
     { key: "import", label: "Import Studio", href: "/import" },
-    { key: "records", label: "Sales Data", href: "/records" },
+    { key: "records", label: "Sales Managers", href: "/records" },
     { key: "regions", label: "Regions", href: "/manage/regions" },
-    { key: "sales-managers", label: "Sales Managers", href: "/manage/sales-managers" },
     { key: "vendors", label: "Vendors", href: "/manage/vendors" },
 ] as const
 

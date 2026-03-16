@@ -2,6 +2,15 @@
 
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ModalPanel } from "@/components/modal-panel"
+import {
+    MONTHS,
+    computeSalesManagerMetrics,
+    normalizeMonth,
+    normalizeQuarter,
+    toMonthMap,
+    type MonthMap,
+    type MonthName,
+} from "@/lib/sales-manager-metrics"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 type SalesRow = {
@@ -12,15 +21,15 @@ type SalesRow = {
     yearTarget: number
     quarterTarget: number
     monthTarget: number
-    month1Name: string
-    month2Name: string
-    month3Name: string
-    jan: number | null
-    feb: number | null
-    mar: number | null
+    selectedQuarter?: number
+    monthlyTargets?: unknown
+    monthlyAchieved?: unknown
     totalAchieved: number | null
+    quarterAchieved?: number | null
+    percentageAchieved?: number | null
+    balanceToQuarterTarget?: number | null
     commitMonth: string
-    commitMar: number | null
+    commitAmount?: number | null
     percentQ1: number | null
     balanceQ1: number | null
 }
@@ -43,17 +52,11 @@ type FormState = {
     yearTarget: string
     quarterTarget: string
     monthTarget: string
-    month1Name: string
-    month2Name: string
-    month3Name: string
-    jan: string
-    feb: string
-    mar: string
-    totalAchieved: string
-    commitMonth: string
-    commitMar: string
-    percentQ1: string
-    balanceQ1: string
+    selectedQuarter: 1 | 2 | 3 | 4
+    monthlyTargets: MonthMap
+    monthlyAchieved: MonthMap
+    commitMonth: MonthName
+    commitAmount: string
 }
 
 type Status = {
@@ -71,6 +74,15 @@ type Pagination = {
 type Summary = {
     totalTarget: number
     totalAchieved: number
+    totalQuarterAchieved?: number
+}
+
+type ApiPayload = {
+    error?: string
+    rows?: SalesRow[]
+    pagination?: Pagination
+    summary?: Summary
+    deleted?: number
 }
 
 type SortField = "region" | "salesManager" | "vendor" | "quarterTarget" | "totalAchieved"
@@ -83,17 +95,11 @@ const emptyForm: FormState = {
     yearTarget: "0",
     quarterTarget: "0",
     monthTarget: "0",
-    month1Name: "JAN",
-    month2Name: "FEB",
-    month3Name: "MAR",
-    jan: "0",
-    feb: "0",
-    mar: "0",
-    totalAchieved: "0",
-    commitMonth: "MAR",
-    commitMar: "0",
-    percentQ1: "0",
-    balanceQ1: "0",
+    selectedQuarter: 1,
+    monthlyTargets: toMonthMap({}),
+    monthlyAchieved: toMonthMap({}),
+    commitMonth: "JANUARY",
+    commitAmount: "0",
 }
 
 const emptyPagination: Pagination = {
@@ -106,6 +112,25 @@ const emptyPagination: Pagination = {
 const emptySummary: Summary = {
     totalTarget: 0,
     totalAchieved: 0,
+    totalQuarterAchieved: 0,
+}
+
+function parseNumber(value: string): number {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+}
+
+function currency(value: unknown): string {
+    const parsed = Number(value ?? 0)
+    const safe = Number.isFinite(parsed) ? parsed : 0
+    return `$${safe.toLocaleString()}`
+}
+
+function percent(value: number, total: number): string {
+    if (total <= 0) {
+        return "0.0%"
+    }
+    return `${((value / total) * 100).toFixed(1)}%`
 }
 
 function toFormState(row: SalesRow): FormState {
@@ -116,17 +141,11 @@ function toFormState(row: SalesRow): FormState {
         yearTarget: String(row.yearTarget ?? 0),
         quarterTarget: String(row.quarterTarget ?? 0),
         monthTarget: String(row.monthTarget ?? 0),
-        month1Name: row.month1Name ?? "JAN",
-        month2Name: row.month2Name ?? "FEB",
-        month3Name: row.month3Name ?? "MAR",
-        jan: String(row.jan ?? 0),
-        feb: String(row.feb ?? 0),
-        mar: String(row.mar ?? 0),
-        totalAchieved: String(row.totalAchieved ?? 0),
-        commitMonth: row.commitMonth ?? "MAR",
-        commitMar: String(row.commitMar ?? 0),
-        percentQ1: String(row.percentQ1 ?? 0),
-        balanceQ1: String(row.balanceQ1 ?? 0),
+        selectedQuarter: normalizeQuarter(row.selectedQuarter ?? 1),
+        monthlyTargets: toMonthMap(row.monthlyTargets),
+        monthlyAchieved: toMonthMap(row.monthlyAchieved),
+        commitMonth: normalizeMonth(row.commitMonth ?? "JANUARY"),
+        commitAmount: String(row.commitAmount ?? 0),
     }
 }
 
@@ -135,32 +154,15 @@ function toPayload(form: FormState) {
         region: form.region,
         salesManager: form.salesManager,
         vendor: form.vendor,
-        yearTarget: Number(form.yearTarget || 0),
-        quarterTarget: Number(form.quarterTarget || 0),
-        monthTarget: Number(form.monthTarget || 0),
-        month1Name: form.month1Name.trim() || "JAN",
-        month2Name: form.month2Name.trim() || "FEB",
-        month3Name: form.month3Name.trim() || "MAR",
-        jan: Number(form.jan || 0),
-        feb: Number(form.feb || 0),
-        mar: Number(form.mar || 0),
-        totalAchieved: Number(form.totalAchieved || 0),
-        commitMonth: form.commitMonth.trim() || "MAR",
-        commitMar: Number(form.commitMar || 0),
-        percentQ1: Number(form.percentQ1 || 0),
-        balanceQ1: Number(form.balanceQ1 || 0),
+        yearTarget: parseNumber(form.yearTarget),
+        quarterTarget: parseNumber(form.quarterTarget),
+        monthTarget: parseNumber(form.monthTarget),
+        selectedQuarter: form.selectedQuarter,
+        monthlyTargets: form.monthlyTargets,
+        monthlyAchieved: form.monthlyAchieved,
+        commitMonth: form.commitMonth,
+        commitAmount: parseNumber(form.commitAmount),
     }
-}
-
-function currency(value: number | null): string {
-    return `$${Number(value ?? 0).toLocaleString()}`
-}
-
-function percent(value: number, total: number): string {
-    if (total <= 0) {
-        return "0.0%"
-    }
-    return `${((value / total) * 100).toFixed(1)}%`
 }
 
 export function SalesDataManager({ initialFilters }: { initialFilters: Filters }) {
@@ -187,6 +189,29 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
     })
     const [pagination, setPagination] = useState<Pagination>(emptyPagination)
     const [summary, setSummary] = useState<Summary>(emptySummary)
+    const [targetMonthDraft, setTargetMonthDraft] = useState<MonthName>("JANUARY")
+    const [targetValueDraft, setTargetValueDraft] = useState("0")
+    const [achievedMonthDraft, setAchievedMonthDraft] = useState<MonthName>("JANUARY")
+    const [achievedValueDraft, setAchievedValueDraft] = useState("0")
+
+    const readApiPayload = async (res: Response): Promise<ApiPayload> => {
+        const contentType = res.headers.get("content-type") ?? ""
+        if (contentType.toLowerCase().includes("application/json")) {
+            try {
+                return (await res.json()) as ApiPayload
+            } catch {
+                return {}
+            }
+        }
+
+        const text = await res.text()
+        return text ? { error: text } : {}
+    }
+
+    const payloadError = (payload: ApiPayload, fallback: string): string => {
+        const message = payload.error
+        return typeof message === "string" && message.trim() ? message : fallback
+    }
 
     const loadRows = useCallback(async () => {
         try {
@@ -202,10 +227,10 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
             params.set("pageSize", String(pagination.pageSize))
 
             const res = await fetch(`/api/sales-data?${params.toString()}`)
-            const payload = await res.json()
+            const payload = await readApiPayload(res)
 
             if (!res.ok) {
-                throw new Error(payload.error ?? "Failed to load sales data")
+                throw new Error(payloadError(payload, "Failed to load sales data"))
             }
 
             setRows(payload.rows ?? [])
@@ -248,8 +273,18 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
     }, [loadOptions])
 
     const coverage = useMemo(
-        () => percent(summary.totalAchieved, summary.totalTarget),
-        [summary.totalAchieved, summary.totalTarget]
+        () => percent(Number(summary.totalQuarterAchieved ?? 0), summary.totalTarget),
+        [summary.totalQuarterAchieved, summary.totalTarget]
+    )
+
+    const computed = useMemo(
+        () =>
+            computeSalesManagerMetrics({
+                selectedQuarter: form.selectedQuarter,
+                quarterTarget: parseNumber(form.quarterTarget),
+                monthlyAchieved: form.monthlyAchieved,
+            }),
+        [form.monthlyAchieved, form.quarterTarget, form.selectedQuarter]
     )
 
     const applyFilters = () => {
@@ -280,12 +315,21 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
     const openCreate = () => {
         setEditingId(null)
         setForm(emptyForm)
+        setTargetMonthDraft("JANUARY")
+        setTargetValueDraft("0")
+        setAchievedMonthDraft("JANUARY")
+        setAchievedValueDraft("0")
         setEditorOpen(true)
     }
 
     const openEdit = (row: SalesRow) => {
         setEditingId(row.id)
-        setForm(toFormState(row))
+        const nextForm = toFormState(row)
+        setForm(nextForm)
+        setTargetMonthDraft("JANUARY")
+        setTargetValueDraft(String(nextForm.monthlyTargets.JANUARY ?? 0))
+        setAchievedMonthDraft("JANUARY")
+        setAchievedValueDraft(String(nextForm.monthlyAchieved.JANUARY ?? 0))
         setEditorOpen(true)
     }
 
@@ -293,6 +337,30 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
         setEditorOpen(false)
         setEditingId(null)
         setForm(emptyForm)
+    }
+
+    const setMonthlyTarget = () => {
+        const month = normalizeMonth(targetMonthDraft)
+        const value = parseNumber(targetValueDraft)
+        setForm((current) => ({
+            ...current,
+            monthlyTargets: {
+                ...current.monthlyTargets,
+                [month]: value,
+            },
+        }))
+    }
+
+    const setMonthlyAchieved = () => {
+        const month = normalizeMonth(achievedMonthDraft)
+        const value = parseNumber(achievedValueDraft)
+        setForm((current) => ({
+            ...current,
+            monthlyAchieved: {
+                ...current.monthlyAchieved,
+                [month]: value,
+            },
+        }))
     }
 
     const handleSubmit = async () => {
@@ -306,10 +374,10 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(toPayload(form)),
             })
-            const payload = await res.json()
+            const payload = await readApiPayload(res)
 
             if (!res.ok) {
-                throw new Error(payload.error ?? "Failed to save sales row")
+                throw new Error(payloadError(payload, "Failed to save sales row"))
             }
 
             closeEditor()
@@ -331,10 +399,10 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
             setBusy(confirmDeleteId)
             setStatus(null)
             const res = await fetch(`/api/sales-data/${confirmDeleteId}`, { method: "DELETE" })
-            const payload = await res.json()
+            const payload = await readApiPayload(res)
 
             if (!res.ok) {
-                throw new Error(payload.error ?? "Failed to delete sales row")
+                throw new Error(payloadError(payload, "Failed to delete sales row"))
             }
 
             setConfirmDeleteId(null)
@@ -360,10 +428,10 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ids: selectedIds }),
             })
-            const payload = await res.json()
+            const payload = await readApiPayload(res)
 
             if (!res.ok) {
-                throw new Error(payload.error ?? "Failed to delete selected rows")
+                throw new Error(payloadError(payload, "Failed to delete selected rows"))
             }
 
             setConfirmBulkDelete(false)
@@ -411,8 +479,8 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                     <p className="mt-2 text-2xl font-semibold text-[#2f261b] dark:text-slate-100">{currency(summary.totalTarget)}</p>
                 </article>
                 <article className="rounded-2xl border border-[#dfd4bf] bg-white/90 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                    <p className="text-sm uppercase tracking-wide text-[#8f7f65] dark:text-slate-400">Total Achieved</p>
-                    <p className="mt-2 text-2xl font-semibold text-[#2f261b] dark:text-slate-100">{currency(summary.totalAchieved)}</p>
+                    <p className="text-sm uppercase tracking-wide text-[#8f7f65] dark:text-slate-400">Quarter Achieved</p>
+                    <p className="mt-2 text-2xl font-semibold text-[#2f261b] dark:text-slate-100">{currency(summary.totalQuarterAchieved)}</p>
                 </article>
                 <article className="rounded-2xl border border-[#dfd4bf] bg-white/90 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                     <p className="text-sm uppercase tracking-wide text-[#8f7f65] dark:text-slate-400">Coverage</p>
@@ -439,15 +507,9 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                        <button onClick={applyFilters} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
-                            Apply filters
-                        </button>
-                        <button onClick={clearFilters} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
-                            Reset
-                        </button>
-                        <button onClick={openCreate} className="rounded-xl bg-[#2c7a58] px-5 py-3 font-semibold text-white transition hover:bg-[#235f45]">
-                            New sales row
-                        </button>
+                        <button onClick={applyFilters} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Apply filters</button>
+                        <button onClick={clearFilters} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Reset</button>
+                        <button onClick={openCreate} className="rounded-xl bg-[#2c7a58] px-5 py-3 font-semibold text-white transition hover:bg-[#235f45]">New sales row</button>
                     </div>
                 </div>
 
@@ -465,28 +527,10 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                         <p className="mt-1 text-sm text-[#6a5b47] dark:text-slate-300">Showing {pageStart} to {pageEnd} of {pagination.totalCount} rows.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            onClick={() => setConfirmBulkDelete(true)}
-                            disabled={selectedIds.length === 0 || loading}
-                            className="rounded-xl bg-[#b74424] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#99371b] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Delete selected ({selectedIds.length})
-                        </button>
-                        <button
-                            onClick={() => setPagination((current) => ({ ...current, page: Math.max(current.page - 1, 1) }))}
-                            disabled={pagination.page <= 1 || loading}
-                            className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            Previous
-                        </button>
+                        <button onClick={() => setConfirmBulkDelete(true)} disabled={selectedIds.length === 0 || loading} className="rounded-xl bg-[#b74424] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#99371b] disabled:cursor-not-allowed disabled:opacity-60">Delete selected ({selectedIds.length})</button>
+                        <button onClick={() => setPagination((current) => ({ ...current, page: Math.max(current.page - 1, 1) }))} disabled={pagination.page <= 1 || loading} className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Previous</button>
                         <span className="px-2 text-sm text-[#6a5b47] dark:text-slate-300">Page {pagination.page} of {pagination.totalPages}</span>
-                        <button
-                            onClick={() => setPagination((current) => ({ ...current, page: Math.min(current.page + 1, current.totalPages) }))}
-                            disabled={pagination.page >= pagination.totalPages || loading}
-                            className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            Next
-                        </button>
+                        <button onClick={() => setPagination((current) => ({ ...current, page: Math.min(current.page + 1, current.totalPages) }))} disabled={pagination.page >= pagination.totalPages || loading} className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Next</button>
                     </div>
                 </div>
 
@@ -495,55 +539,96 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 ) : rows.length === 0 ? (
                     <div className="px-6 py-10 text-[#6a5b47] dark:text-slate-300">No sales rows match the current filters.</div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-[#f4ebdd] text-left text-[#5f523f] dark:bg-slate-800 dark:text-slate-200">
-                                <tr>
-                                    <th className="px-4 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => toggleSelectAll(event.target.checked)} /></th>
-                                    <th className="px-4 py-3"><button onClick={() => toggleSort("region")}>Region {sortBy === "region" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                    <th className="px-4 py-3"><button onClick={() => toggleSort("salesManager")}>Sales Manager {sortBy === "salesManager" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                    <th className="px-4 py-3"><button onClick={() => toggleSort("vendor")}>Vendor {sortBy === "vendor" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                    <th className="px-4 py-3"><button onClick={() => toggleSort("quarterTarget")}>Quarter Target {sortBy === "quarterTarget" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                    <th className="px-4 py-3"><button onClick={() => toggleSort("totalAchieved")}>Achieved {sortBy === "totalAchieved" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                    <th className="px-4 py-3">Progress</th>
-                                    <th className="px-4 py-3">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row) => {
-                                    const rowTarget = Number(row.quarterTarget ?? 0)
-                                    const rowAchieved = Number(row.totalAchieved ?? 0)
-                                    return (
-                                        <tr key={row.id} className="border-t border-[#efe5d6] text-[#342b20] dark:border-slate-700 dark:text-slate-100">
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.includes(row.id)}
-                                                    onChange={(event) => toggleSelectedId(row.id, event.target.checked)}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 font-medium">{row.region}</td>
-                                            <td className="px-4 py-3">{row.salesManager}</td>
-                                            <td className="px-4 py-3">{row.vendor}</td>
-                                            <td className="px-4 py-3">{currency(row.quarterTarget)}</td>
-                                            <td className="px-4 py-3">{currency(row.totalAchieved)}</td>
-                                            <td className="px-4 py-3">{percent(rowAchieved, rowTarget)}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => openEdit(row)} className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-xs font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
-                                                        Edit
-                                                    </button>
-                                                    <button onClick={() => setConfirmDeleteId(row.id)} className="rounded-xl bg-[#b74424] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#99371b]">
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        <div className="space-y-3 p-4 md:hidden">
+                            {rows.map((row) => {
+                                const rowTarget = Number(row.quarterTarget ?? 0)
+                                const rowAchieved = Number(row.quarterAchieved ?? row.totalAchieved ?? 0)
+                                const rowPercent = row.percentageAchieved !== undefined && row.percentageAchieved !== null
+                                    ? `${Number(row.percentageAchieved).toFixed(1)}%`
+                                    : percent(rowAchieved, rowTarget)
+                                const rowBalance = row.balanceToQuarterTarget ?? row.balanceQ1 ?? Math.max(rowTarget - rowAchieved, 0)
+
+                                return (
+                                    <article key={`mobile-row-${row.id}`} className="rounded-2xl border border-[#efe5d6] bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="font-semibold text-[#342b20] dark:text-slate-100">{row.salesManager}</p>
+                                                <p className="text-xs text-[#6a5b47] dark:text-slate-300">{row.region} | {row.vendor}</p>
+                                            </div>
+                                            <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleSelectedId(row.id, event.target.checked)} />
+                                        </div>
+
+                                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                                            <div className="rounded-lg border border-[#efe5d6] px-2 py-2 dark:border-slate-700">
+                                                <p className="text-[#6a5b47] dark:text-slate-300">Quarter Target</p>
+                                                <p className="font-semibold text-[#342b20] dark:text-slate-100">{currency(rowTarget)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[#efe5d6] px-2 py-2 dark:border-slate-700">
+                                                <p className="text-[#6a5b47] dark:text-slate-300">Achieved</p>
+                                                <p className="font-semibold text-[#342b20] dark:text-slate-100">{currency(rowAchieved)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[#efe5d6] px-2 py-2 dark:border-slate-700">
+                                                <p className="text-[#6a5b47] dark:text-slate-300">% Achieved</p>
+                                                <p className="font-semibold text-[#342b20] dark:text-slate-100">{rowPercent}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[#efe5d6] px-2 py-2 dark:border-slate-700">
+                                                <p className="text-[#6a5b47] dark:text-slate-300">Balance</p>
+                                                <p className="font-semibold text-[#342b20] dark:text-slate-100">{currency(rowBalance)}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-3 flex gap-2">
+                                            <button onClick={() => openEdit(row)} className="flex-1 rounded-xl border border-[#d6c7ae] px-3 py-2 text-xs font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Edit</button>
+                                            <button onClick={() => setConfirmDeleteId(row.id)} className="flex-1 rounded-xl bg-[#b74424] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#99371b]">Delete</button>
+                                        </div>
+                                    </article>
+                                )
+                            })}
+                        </div>
+
+                        <div className="hidden overflow-x-auto md:block">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-[#f4ebdd] text-left text-[#5f523f] dark:bg-slate-800 dark:text-slate-200">
+                                    <tr>
+                                        <th className="px-4 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => toggleSelectAll(event.target.checked)} /></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("region")}>Region {sortBy === "region" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("salesManager")}>Sales Manager {sortBy === "salesManager" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("vendor")}>Vendor {sortBy === "vendor" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("quarterTarget")}>Quarter Target {sortBy === "quarterTarget" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("totalAchieved")}>Achieved {sortBy === "totalAchieved" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3">% Achieved</th>
+                                        <th className="px-4 py-3">Balance</th>
+                                        <th className="px-4 py-3">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row) => {
+                                        const rowTarget = Number(row.quarterTarget ?? 0)
+                                        const rowAchieved = Number(row.quarterAchieved ?? row.totalAchieved ?? 0)
+                                        return (
+                                            <tr key={row.id} className="border-t border-[#efe5d6] text-[#342b20] dark:border-slate-700 dark:text-slate-100">
+                                                <td className="px-4 py-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleSelectedId(row.id, event.target.checked)} /></td>
+                                                <td className="px-4 py-3 font-medium">{row.region}</td>
+                                                <td className="px-4 py-3">{row.salesManager}</td>
+                                                <td className="px-4 py-3">{row.vendor}</td>
+                                                <td className="px-4 py-3">{currency(row.quarterTarget)}</td>
+                                                <td className="px-4 py-3">{currency(rowAchieved)}</td>
+                                                <td className="px-4 py-3">{row.percentageAchieved !== undefined && row.percentageAchieved !== null ? `${Number(row.percentageAchieved).toFixed(1)}%` : percent(rowAchieved, rowTarget)}</td>
+                                                <td className="px-4 py-3">{currency(row.balanceToQuarterTarget ?? row.balanceQ1 ?? Math.max(rowTarget - rowAchieved, 0))}</td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => openEdit(row)} className="rounded-xl border border-[#d6c7ae] px-3 py-2 text-xs font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Edit</button>
+                                                        <button onClick={() => setConfirmDeleteId(row.id)} className="rounded-xl bg-[#b74424] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#99371b]">Delete</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </section>
 
@@ -551,9 +636,9 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 open={editorOpen}
                 onClose={closeEditor}
                 title={editingId === null ? "Create sales row" : "Edit sales row"}
-                description="Use the same business headings as the Master sheet and set month labels for the active cycle (for example APR, MAY, JUN)."
+                description="Use the same planning workflow as Sales Manager Plans: quarter selection, month-wise targets, achieved values, commitment, and auto-calculated metrics."
             >
-                <div className="space-y-5">
+                <div className="space-y-6">
                     <div>
                         <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#8a7a62] dark:text-slate-400">Master identifiers</h4>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -563,37 +648,101 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                         </div>
                     </div>
 
-                    <div>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#8a7a62] dark:text-slate-400">Targets</h4>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <input className={inputClassName} placeholder="YR TGT" value={form.yearTarget} onChange={(event) => setForm((current) => ({ ...current, yearTarget: event.target.value }))} />
-                            <input className={inputClassName} placeholder="QTR TGT" value={form.quarterTarget} onChange={(event) => setForm((current) => ({ ...current, quarterTarget: event.target.value }))} />
-                            <input className={inputClassName} placeholder="MON TGT" value={form.monthTarget} onChange={(event) => setForm((current) => ({ ...current, monthTarget: event.target.value }))} />
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#8a7a62] dark:text-slate-400">Targets</h4>
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8a7a62] dark:text-slate-400">Yearly Target</label>
+                            <input className={inputClassName} placeholder="Yearly Target" value={form.yearTarget} onChange={(event) => setForm((current) => ({ ...current, yearTarget: event.target.value }))} />
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8a7a62] dark:text-slate-400">Quarterly Target</label>
+                            <input className={inputClassName} placeholder="Quarterly Target" value={form.quarterTarget} onChange={(event) => setForm((current) => ({ ...current, quarterTarget: event.target.value }))} />
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8a7a62] dark:text-slate-400">Monthly Target</label>
+                            <input className={inputClassName} placeholder="Monthly Target" value={form.monthTarget} onChange={(event) => setForm((current) => ({ ...current, monthTarget: event.target.value }))} />
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8a7a62] dark:text-slate-400">Quarter</label>
+                            <select className={inputClassName} value={String(form.selectedQuarter)} onChange={(event) => setForm((current) => ({ ...current, selectedQuarter: normalizeQuarter(event.target.value) }))}>
+                                <option value="1">Quarter 1</option>
+                                <option value="2">Quarter 2</option>
+                                <option value="3">Quarter 3</option>
+                                <option value="4">Quarter 4</option>
+                            </select>
                         </div>
                     </div>
 
-                    <div>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#8a7a62] dark:text-slate-400">Monthly values</h4>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <input className={inputClassName} placeholder="Month 1 Name (JAN / APR)" value={form.month1Name} onChange={(event) => setForm((current) => ({ ...current, month1Name: event.target.value.toUpperCase() }))} />
-                            <input className={inputClassName} placeholder="Month 2 Name (FEB / MAY)" value={form.month2Name} onChange={(event) => setForm((current) => ({ ...current, month2Name: event.target.value.toUpperCase() }))} />
-                            <input className={inputClassName} placeholder="Month 3 Name (MAR / JUN)" value={form.month3Name} onChange={(event) => setForm((current) => ({ ...current, month3Name: event.target.value.toUpperCase() }))} />
-                            <input className={inputClassName} placeholder="Month 1 Amount" value={form.jan} onChange={(event) => setForm((current) => ({ ...current, jan: event.target.value }))} />
-                            <input className={inputClassName} placeholder="Month 2 Amount" value={form.feb} onChange={(event) => setForm((current) => ({ ...current, feb: event.target.value }))} />
-                            <input className={inputClassName} placeholder="Month 3 Amount" value={form.mar} onChange={(event) => setForm((current) => ({ ...current, mar: event.target.value }))} />
-                        </div>
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        <section className="rounded-2xl border border-[#e9ddc9] bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                            <h4 className="text-sm font-semibold text-[#30261a] dark:text-slate-100">Set monthly targets</h4>
+                            <div className="mt-3 flex flex-wrap gap-3">
+                                <select className={inputClassName} value={targetMonthDraft} onChange={(event) => setTargetMonthDraft(normalizeMonth(event.target.value))}>
+                                    {MONTHS.map((month) => <option key={month} value={month}>{month}</option>)}
+                                </select>
+                                <input className={inputClassName} placeholder="Target value" value={targetValueDraft} onChange={(event) => setTargetValueDraft(event.target.value)} />
+                                <button onClick={setMonthlyTarget} className="rounded-xl bg-[#2c7a58] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#235f45]">Set target</button>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {MONTHS.map((month) => (
+                                    <div key={`target-${month}`} className="flex items-center justify-between rounded-lg border border-[#efe5d6] px-3 py-2 text-xs dark:border-slate-700">
+                                        <span>{month}</span>
+                                        <span className="font-semibold">{currency(form.monthlyTargets[month])}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-[#e9ddc9] bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                            <h4 className="text-sm font-semibold text-[#30261a] dark:text-slate-100">Set monthly achieved</h4>
+                            <div className="mt-3 flex flex-wrap gap-3">
+                                <select className={inputClassName} value={achievedMonthDraft} onChange={(event) => setAchievedMonthDraft(normalizeMonth(event.target.value))}>
+                                    {MONTHS.map((month) => <option key={month} value={month}>{month}</option>)}
+                                </select>
+                                <input className={inputClassName} placeholder="Achieved value" value={achievedValueDraft} onChange={(event) => setAchievedValueDraft(event.target.value)} />
+                                <button onClick={setMonthlyAchieved} className="rounded-xl bg-[#2c7a58] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#235f45]">Set achieved</button>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {MONTHS.map((month) => (
+                                    <div key={`achieved-${month}`} className="flex items-center justify-between rounded-lg border border-[#efe5d6] px-3 py-2 text-xs dark:border-slate-700">
+                                        <span>{month}</span>
+                                        <span className="font-semibold">{currency(form.monthlyAchieved[month])}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
                     </div>
 
-                    <div>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#8a7a62] dark:text-slate-400">Performance</h4>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <input className={inputClassName} placeholder="Total Achieved" value={form.totalAchieved} onChange={(event) => setForm((current) => ({ ...current, totalAchieved: event.target.value }))} />
-                            <input className={inputClassName} placeholder="Commit Month" value={form.commitMonth} onChange={(event) => setForm((current) => ({ ...current, commitMonth: event.target.value.toUpperCase() }))} />
-                            <input className={inputClassName} placeholder="Commit Amount" value={form.commitMar} onChange={(event) => setForm((current) => ({ ...current, commitMar: event.target.value }))} />
-                            <input className={inputClassName} placeholder="%Achvd Q1" value={form.percentQ1} onChange={(event) => setForm((current) => ({ ...current, percentQ1: event.target.value }))} />
-                            <input className={inputClassName} placeholder="Bal to Achv Q1" value={form.balanceQ1} onChange={(event) => setForm((current) => ({ ...current, balanceQ1: event.target.value }))} />
+                    <section className="rounded-2xl border border-[#e9ddc9] bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                        <h4 className="text-sm font-semibold text-[#30261a] dark:text-slate-100">Commitment and auto-calculated performance</h4>
+                        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <select className={inputClassName} value={form.commitMonth} onChange={(event) => setForm((current) => ({ ...current, commitMonth: normalizeMonth(event.target.value) }))}>
+                                {MONTHS.map((month) => <option key={`commit-${month}`} value={month}>{month}</option>)}
+                            </select>
+                            <input className={inputClassName} placeholder="Commitment amount" value={form.commitAmount} onChange={(event) => setForm((current) => ({ ...current, commitAmount: event.target.value }))} />
                         </div>
-                    </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <div className="rounded-xl border border-[#efe5d6] px-4 py-3 dark:border-slate-700">
+                                <p className="text-xs text-[#6a5b47] dark:text-slate-300">Total Achieved</p>
+                                <p className="text-base font-semibold text-[#30261a] dark:text-slate-100">{currency(computed.totalAchieved)}</p>
+                            </div>
+                            <div className="rounded-xl border border-[#efe5d6] px-4 py-3 dark:border-slate-700">
+                                <p className="text-xs text-[#6a5b47] dark:text-slate-300">Quarter Achieved</p>
+                                <p className="text-base font-semibold text-[#30261a] dark:text-slate-100">{currency(computed.quarterAchieved)}</p>
+                            </div>
+                            <div className="rounded-xl border border-[#efe5d6] px-4 py-3 dark:border-slate-700">
+                                <p className="text-xs text-[#6a5b47] dark:text-slate-300">Percentage Achieved</p>
+                                <p className="text-base font-semibold text-[#30261a] dark:text-slate-100">{computed.percentageAchieved.toFixed(1)}%</p>
+                            </div>
+                            <div className="rounded-xl border border-[#efe5d6] px-4 py-3 dark:border-slate-700">
+                                <p className="text-xs text-[#6a5b47] dark:text-slate-300">Balance to Quarter Target</p>
+                                <p className="text-base font-semibold text-[#30261a] dark:text-slate-100">{currency(computed.balanceToQuarterTarget)}</p>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <datalist id="regions-list">{options.regions.map((item) => <option key={item.id} value={item.name} />)}</datalist>
@@ -601,9 +750,7 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 <datalist id="vendors-list">{options.vendors.map((item) => <option key={item.id} value={item.name} />)}</datalist>
 
                 <div className="mt-6 flex flex-wrap justify-end gap-3">
-                    <button onClick={closeEditor} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
-                        Cancel
-                    </button>
+                    <button onClick={closeEditor} className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancel</button>
                     <button onClick={handleSubmit} disabled={busy !== null} className="rounded-xl bg-[#2c7a58] px-5 py-3 font-semibold text-white transition hover:bg-[#235f45] disabled:cursor-not-allowed disabled:opacity-60">
                         {busy === "create" || typeof busy === "number" ? "Saving..." : editingId === null ? "Create row" : "Save changes"}
                     </button>
@@ -629,6 +776,6 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                 onCancel={() => setConfirmBulkDelete(false)}
                 onConfirm={handleBulkDelete}
             />
-        </section>
+        </section >
     )
 }

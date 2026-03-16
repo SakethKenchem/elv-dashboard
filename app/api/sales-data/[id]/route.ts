@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"
+import {
+    computeSalesManagerMetrics,
+    type MonthMap,
+    normalizeMonth,
+    normalizeQuarter,
+    quarterMonths,
+    sanitizeName,
+    sanitizeNumber,
+    toMonthMap,
+} from "@/lib/sales-manager-metrics"
 
 type SalesPayload = {
     region: string
@@ -9,48 +19,27 @@ type SalesPayload = {
     yearTarget: number
     quarterTarget: number
     monthTarget: number
-    month1Name: string
-    month2Name: string
-    month3Name: string
-    jan: number
-    feb: number
-    mar: number
-    totalAchieved: number
+    selectedQuarter: 1 | 2 | 3 | 4
+    monthlyTargets: MonthMap
+    monthlyAchieved: MonthMap
     commitMonth: string
-    commitMar: number
-    percentQ1: number
-    balanceQ1: number
-}
-
-function parseText(value: unknown): string {
-    return String(value ?? "").trim()
-}
-
-function parseNumber(value: unknown): number {
-    const parsed = Number(value ?? 0)
-    return Number.isFinite(parsed) ? parsed : 0
+    commitAmount: number
 }
 
 function parsePayload(input: unknown): SalesPayload {
     const body = (input ?? {}) as Record<string, unknown>
     const payload: SalesPayload = {
-        region: parseText(body.region),
-        salesManager: parseText(body.salesManager),
-        vendor: parseText(body.vendor),
-        yearTarget: parseNumber(body.yearTarget),
-        quarterTarget: parseNumber(body.quarterTarget),
-        monthTarget: parseNumber(body.monthTarget),
-        month1Name: parseText(body.month1Name) || "JAN",
-        month2Name: parseText(body.month2Name) || "FEB",
-        month3Name: parseText(body.month3Name) || "MAR",
-        jan: parseNumber(body.jan),
-        feb: parseNumber(body.feb),
-        mar: parseNumber(body.mar),
-        totalAchieved: parseNumber(body.totalAchieved),
-        commitMonth: parseText(body.commitMonth) || "MAR",
-        commitMar: parseNumber(body.commitMar),
-        percentQ1: parseNumber(body.percentQ1),
-        balanceQ1: parseNumber(body.balanceQ1),
+        region: sanitizeName(body.region),
+        salesManager: sanitizeName(body.salesManager),
+        vendor: sanitizeName(body.vendor),
+        yearTarget: sanitizeNumber(body.yearTarget),
+        quarterTarget: sanitizeNumber(body.quarterTarget),
+        monthTarget: sanitizeNumber(body.monthTarget),
+        selectedQuarter: normalizeQuarter(body.selectedQuarter),
+        monthlyTargets: toMonthMap(body.monthlyTargets),
+        monthlyAchieved: toMonthMap(body.monthlyAchieved),
+        commitMonth: normalizeMonth(body.commitMonth),
+        commitAmount: sanitizeNumber(body.commitAmount),
     }
 
     if (!payload.region || !payload.salesManager || !payload.vendor) {
@@ -58,6 +47,40 @@ function parsePayload(input: unknown): SalesPayload {
     }
 
     return payload
+}
+
+function buildPersistenceData(payload: SalesPayload) {
+    const quarter = normalizeQuarter(payload.selectedQuarter)
+    const quarterMonthNames = quarterMonths(quarter)
+    const metrics = computeSalesManagerMetrics({
+        selectedQuarter: quarter,
+        quarterTarget: payload.quarterTarget,
+        monthlyAchieved: payload.monthlyAchieved,
+    })
+
+    return {
+        region: payload.region,
+        salesManager: payload.salesManager,
+        vendor: payload.vendor,
+        yearTarget: payload.yearTarget,
+        quarterTarget: payload.quarterTarget,
+        monthTarget: payload.monthTarget,
+        selectedQuarter: quarter,
+        monthlyTargets: payload.monthlyTargets,
+        monthlyAchieved: payload.monthlyAchieved,
+        month1Name: quarterMonthNames[0],
+        month2Name: quarterMonthNames[1],
+        month3Name: quarterMonthNames[2],
+        jan: payload.monthlyAchieved[quarterMonthNames[0]] ?? 0,
+        feb: payload.monthlyAchieved[quarterMonthNames[1]] ?? 0,
+        mar: payload.monthlyAchieved[quarterMonthNames[2]] ?? 0,
+        totalAchieved: metrics.totalAchieved,
+        commitMonth: payload.commitMonth,
+        commitMar: payload.commitAmount,
+        commitAmount: payload.commitAmount,
+        percentQ1: metrics.percentageAchieved,
+        balanceQ1: metrics.balanceToQuarterTarget,
+    }
 }
 
 async function syncCatalogs(ownerId: number, payload: SalesPayload) {
@@ -102,7 +125,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         await syncCatalogs(ownerId, payload)
         const row = await prisma.salesData.update({
             where: { id: numericId, ownerId },
-            data: payload,
+            data: buildPersistenceData(payload),
         })
         return NextResponse.json({ row })
     } catch (error) {

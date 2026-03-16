@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { getCurrentUserId } from "@/lib/current-user"
+import { computeSalesManagerMetrics, normalizeMonth, normalizeQuarter, toMonthMap } from "@/lib/sales-manager-metrics"
 
 type RegionAggregate = {
   yearlyTarget: number
@@ -33,9 +34,29 @@ export async function GET() {
 
     }
 
+    const monthlyAchieved = toMonthMap(row.monthlyAchieved)
+    const hasStoredValues = Object.values(monthlyAchieved).some((value) => Number(value ?? 0) !== 0)
+
+    if (!hasStoredValues) {
+      monthlyAchieved[normalizeMonth(row.month1Name)] = Number(row.jan ?? 0)
+      monthlyAchieved[normalizeMonth(row.month2Name)] = Number(row.feb ?? 0)
+      monthlyAchieved[normalizeMonth(row.month3Name)] = Number(row.mar ?? 0)
+    }
+
+    const metrics = computeSalesManagerMetrics({
+      selectedQuarter: normalizeQuarter(row.selectedQuarter),
+      quarterTarget: Number(row.quarterTarget ?? 0),
+      monthlyAchieved,
+    })
+
+    const achievedForDashboard =
+      row.totalAchieved === null || row.totalAchieved === undefined
+        ? Number(metrics.quarterAchieved ?? 0)
+        : Number(row.totalAchieved)
+
     regions[row.region].yearlyTarget += row.yearTarget || 0
     regions[row.region].target += row.quarterTarget || 0
-    regions[row.region].achieved += row.totalAchieved || 0
+    regions[row.region].achieved += achievedForDashboard
 
   })
 

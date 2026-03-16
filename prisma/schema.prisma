@@ -41,8 +41,19 @@ model Region {
 model SalesManager {
   id        Int      @id @default(autoincrement())
   name      String
+  region    String?
+  vendor    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  yearTarget      Float  @default(0)
+  quarterTarget   Float  @default(0)
+  monthTarget     Float  @default(0)
+  selectedQuarter Int    @default(1)
+  monthlyTargets  Json?
+  monthlyAchieved Json?
+  commitMonth     String?
+  commitAmount    Float?
 
   ownerId Int
   owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -76,6 +87,9 @@ model SalesData {
   yearTarget    Float
   quarterTarget Float
   monthTarget   Float
+  selectedQuarter Int   @default(1)
+  monthlyTargets  Json?
+  monthlyAchieved Json?
 
   month1Name    String  @default("JAN")
   month2Name    String  @default("FEB")
@@ -88,6 +102,7 @@ model SalesData {
   totalAchieved Float?
   commitMonth   String  @default("MAR")
   commitMar     Float?
+  commitAmount  Float?
 
   percentQ1     Float?
   balanceQ1     Float?

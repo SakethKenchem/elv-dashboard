@@ -101,7 +101,9 @@ export default function ImportPage() {
       const res = await fetch("/api/export")
       if (!res.ok) {
         const payload = await readApiPayload(res)
-        throw new Error(String(payload.error ?? "Export failed"))
+        const errorMessage = String(payload.error ?? "Export failed")
+        const details = payload.details ? ` (${String(payload.details)})` : ""
+        throw new Error(`${errorMessage}${details}`)
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)

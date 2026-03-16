@@ -1,7 +1,7 @@
 import { AppShell } from "../../../components/app-shell"
 import { CatalogManager } from "../../../components/catalog-manager"
 import { catalogConfig, isCatalogEntity } from "@/lib/catalog"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
 type ManagePageProps = {
     params: Promise<{ entity: string }>
@@ -12,6 +12,10 @@ export default async function ManageEntityPage({ params }: ManagePageProps) {
 
     if (!isCatalogEntity(entity)) {
         notFound()
+    }
+
+    if (entity === "sales-managers") {
+        redirect("/records#sales-manager-plans")
     }
 
     const meta = catalogConfig[entity]
