@@ -13,7 +13,7 @@ export async function GET() {
 
   const regions: Record<string, RegionAggregate> = {}
 
-  data.forEach((row) => {
+  data.forEach((row: (typeof data)[number]) => {
 
     if (!regions[row.region]) {
 

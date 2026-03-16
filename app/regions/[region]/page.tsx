@@ -32,8 +32,8 @@ export default async function RegionDetailsPage({ params }: RegionPageProps) {
         notFound()
     }
 
-    const totalTarget = rows.reduce((sum, row) => sum + Number(row.quarterTarget ?? 0), 0)
-    const totalAchieved = rows.reduce((sum, row) => sum + Number(row.totalAchieved ?? 0), 0)
+    const totalTarget = rows.reduce((sum: number, row: (typeof rows)[number]) => sum + Number(row.quarterTarget ?? 0), 0)
+    const totalAchieved = rows.reduce((sum: number, row: (typeof rows)[number]) => sum + Number(row.totalAchieved ?? 0), 0)
     const coverage = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0
     const month1Label = rows[0]?.month1Name ?? "MONTH 1"
     const month2Label = rows[0]?.month2Name ?? "MONTH 2"
@@ -90,7 +90,7 @@ export default async function RegionDetailsPage({ params }: RegionPageProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row) => (
+                        {rows.map((row: (typeof rows)[number]) => (
                             <tr key={row.id} className="border-t border-[#efe5d6] text-[#342b20] dark:border-slate-700 dark:text-slate-100">
                                 <td className="px-4 py-3">{row.salesManager}</td>
                                 <td className="px-4 py-3">{row.vendor}</td>

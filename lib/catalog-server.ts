@@ -26,21 +26,21 @@ async function getUsageMap(entity: CatalogEntity): Promise<Map<string, number>> 
                 by: ["region"],
                 _count: { _all: true },
             })
-            return new Map(rows.map((row) => [row.region, row._count._all]))
+            return new Map(rows.map((row: (typeof rows)[number]) => [row.region, row._count._all]))
         }
         case "sales-managers": {
             const rows = await prisma.salesData.groupBy({
                 by: ["salesManager"],
                 _count: { _all: true },
             })
-            return new Map(rows.map((row) => [row.salesManager, row._count._all]))
+            return new Map(rows.map((row: (typeof rows)[number]) => [row.salesManager, row._count._all]))
         }
         case "vendors": {
             const rows = await prisma.salesData.groupBy({
                 by: ["vendor"],
                 _count: { _all: true },
             })
-            return new Map(rows.map((row) => [row.vendor, row._count._all]))
+            return new Map(rows.map((row: (typeof rows)[number]) => [row.vendor, row._count._all]))
         }
     }
 }
@@ -54,9 +54,9 @@ async function syncCatalogFromSalesData(entity: CatalogEntity) {
             })
             await Promise.all(
                 rows
-                    .map((row) => row.region.trim())
+                    .map((row: (typeof rows)[number]) => row.region.trim())
                     .filter(Boolean)
-                    .map((name) =>
+                    .map((name: string) =>
                         prisma.region.upsert({
                             where: { name },
                             update: {},
@@ -73,9 +73,9 @@ async function syncCatalogFromSalesData(entity: CatalogEntity) {
             })
             await Promise.all(
                 rows
-                    .map((row) => row.salesManager.trim())
+                    .map((row: (typeof rows)[number]) => row.salesManager.trim())
                     .filter(Boolean)
-                    .map((name) =>
+                    .map((name: string) =>
                         prisma.salesManager.upsert({
                             where: { name },
                             update: {},
@@ -92,9 +92,9 @@ async function syncCatalogFromSalesData(entity: CatalogEntity) {
             })
             await Promise.all(
                 rows
-                    .map((row) => row.vendor.trim())
+                    .map((row: (typeof rows)[number]) => row.vendor.trim())
                     .filter(Boolean)
-                    .map((name) =>
+                    .map((name: string) =>
                         prisma.vendor.upsert({
                             where: { name },
                             update: {},
@@ -114,7 +114,7 @@ export async function listCatalogItems(entity: CatalogEntity): Promise<CatalogIt
     switch (entity) {
         case "regions": {
             const items = await prisma.region.findMany({ orderBy: { name: "asc" } })
-            return items.map((item) => ({
+            return items.map((item: (typeof items)[number]) => ({
                 id: item.id,
                 name: item.name,
                 usageCount: usageMap.get(item.name) ?? 0,
@@ -122,7 +122,7 @@ export async function listCatalogItems(entity: CatalogEntity): Promise<CatalogIt
         }
         case "sales-managers": {
             const items = await prisma.salesManager.findMany({ orderBy: { name: "asc" } })
-            return items.map((item) => ({
+            return items.map((item: (typeof items)[number]) => ({
                 id: item.id,
                 name: item.name,
                 usageCount: usageMap.get(item.name) ?? 0,
@@ -130,7 +130,7 @@ export async function listCatalogItems(entity: CatalogEntity): Promise<CatalogIt
         }
         case "vendors": {
             const items = await prisma.vendor.findMany({ orderBy: { name: "asc" } })
-            return items.map((item) => ({
+            return items.map((item: (typeof items)[number]) => ({
                 id: item.id,
                 name: item.name,
                 usageCount: usageMap.get(item.name) ?? 0,

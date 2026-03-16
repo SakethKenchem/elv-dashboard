@@ -251,7 +251,7 @@ export async function POST(req: NextRequest) {
         })
 
         const existingKeys = new Set(
-            existing.map((row) =>
+            existing.map((row: (typeof existing)[number]) =>
                 buildRecordKey({
                     region: row.region,
                     salesManager: row.salesManager,

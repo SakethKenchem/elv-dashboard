@@ -29,7 +29,7 @@ export default async function RegionsDirectoryPage() {
             description="Browse all regions and jump into complete row-level details for each region."
         >
             <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {rows.map((row) => {
+                {rows.map((row: (typeof rows)[number]) => {
                     const target = Number(row._sum.quarterTarget ?? 0)
                     const achieved = Number(row._sum.totalAchieved ?? 0)
                     const progress = target > 0 ? ((achieved / target) * 100).toFixed(1) : "0.0"

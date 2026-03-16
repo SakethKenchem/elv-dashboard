@@ -25,27 +25,58 @@ export function SidebarFilters() {
     })
     const [dimension, setDimension] = useState<JumpDimension>("region")
     const [selectedValue, setSelectedValue] = useState("")
+    const [loadError, setLoadError] = useState<string | null>(null)
     const router = useRouter()
 
     useEffect(() => {
+        const parsePayload = async (res: Response) => {
+            const contentType = res.headers.get("content-type") ?? ""
+            const raw = await res.text()
+
+            if (!res.ok) {
+                if (contentType.includes("application/json")) {
+                    try {
+                        const payload = JSON.parse(raw) as { error?: string }
+                        throw new Error(payload.error ?? "Failed to load filters")
+                    } catch {
+                        throw new Error("Failed to load filters")
+                    }
+                }
+                throw new Error("Failed to load filters")
+            }
+
+            if (!contentType.includes("application/json")) {
+                throw new Error("Unexpected response while loading filters")
+            }
+
+            return JSON.parse(raw) as { items?: SidebarItem[] }
+        }
+
         const load = async () => {
-            const [regionsRes, managersRes, vendorsRes] = await Promise.all([
-                fetch("/api/catalog/regions"),
-                fetch("/api/catalog/sales-managers"),
-                fetch("/api/catalog/vendors"),
-            ])
+            try {
+                setLoadError(null)
 
-            const [regionsPayload, managersPayload, vendorsPayload] = await Promise.all([
-                regionsRes.json(),
-                managersRes.json(),
-                vendorsRes.json(),
-            ])
+                const [regionsRes, managersRes, vendorsRes] = await Promise.all([
+                    fetch("/api/catalog/regions"),
+                    fetch("/api/catalog/sales-managers"),
+                    fetch("/api/catalog/vendors"),
+                ])
 
-            setItems({
-                regions: regionsPayload.items ?? [],
-                salesManagers: managersPayload.items ?? [],
-                vendors: vendorsPayload.items ?? [],
-            })
+                const [regionsPayload, managersPayload, vendorsPayload] = await Promise.all([
+                    parsePayload(regionsRes),
+                    parsePayload(managersRes),
+                    parsePayload(vendorsRes),
+                ])
+
+                setItems({
+                    regions: regionsPayload.items ?? [],
+                    salesManagers: managersPayload.items ?? [],
+                    vendors: vendorsPayload.items ?? [],
+                })
+            } catch (error) {
+                setItems({ regions: [], salesManagers: [], vendors: [] })
+                setLoadError(error instanceof Error ? error.message : "Failed to load filters")
+            }
         }
 
         load()
@@ -114,6 +145,10 @@ export function SidebarFilters() {
                         Open records
                     </button>
                 </div>
+
+                {loadError ? (
+                    <p className="mt-2 text-xs text-[#8a3c1f] dark:text-rose-300">{loadError}</p>
+                ) : null}
             </div>
 
             <div>
