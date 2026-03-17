@@ -1,3 +1,4 @@
+﻿/* Module: Login page entry point for existing users. */
 import { LoginForm } from "@/components/login-form"
 import Link from "next/link"
 
@@ -73,3 +74,4 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </main>
     )
 }
+

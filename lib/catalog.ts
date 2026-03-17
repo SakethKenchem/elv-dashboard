@@ -1,3 +1,4 @@
+﻿/* Module: Catalog entity metadata used by UI routing and labels for master data screens. */
 export const catalogConfig = {
     regions: {
         title: "Regions",
@@ -24,3 +25,4 @@ export type CatalogEntity = keyof typeof catalogConfig
 export function isCatalogEntity(value: string): value is CatalogEntity {
     return value in catalogConfig
 }
+

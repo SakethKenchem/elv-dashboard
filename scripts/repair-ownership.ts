@@ -1,3 +1,4 @@
+﻿/* Module: One-off maintenance script to repair ownerId references across records after auth or migration inconsistencies. */
 import { prisma } from "../lib/prisma"
 
 type CountRow = { count: number }

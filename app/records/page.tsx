@@ -1,3 +1,4 @@
+﻿/* Module: Sales Managers hub route that hosts the primary manager plan management experience. */
 import { AppShell } from "../../components/app-shell"
 import { SalesManagerCrud } from "@/components/sales-manager-crud"
 
@@ -19,3 +20,4 @@ export default async function RecordsPage({ searchParams: _searchParams }: Recor
         </AppShell>
     )
 }
+

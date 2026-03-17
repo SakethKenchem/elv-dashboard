@@ -1,3 +1,4 @@
+﻿/* Module: API endpoint that removes duplicate sales rows while preserving canonical records. */
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { getCurrentUserId } from "@/lib/current-user"

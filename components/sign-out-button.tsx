@@ -1,3 +1,4 @@
+﻿/* Module: Reusable sign-out action button tied to NextAuth logout flow. */
 "use client"
 
 import { signOut } from "next-auth/react"
@@ -13,3 +14,4 @@ export function SignOutButton() {
         </button>
     )
 }
+

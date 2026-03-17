@@ -1,3 +1,4 @@
+﻿/* Module: Regions summary page listing aggregated performance by region. */
 import { AppShell } from "@/components/app-shell"
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
@@ -63,3 +64,4 @@ export default async function RegionsDirectoryPage() {
         </AppShell>
     )
 }
+

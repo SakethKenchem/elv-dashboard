@@ -1,3 +1,4 @@
+﻿/* Module: Generic catalog CRUD UI for region/vendor and other lookup tables. */
 "use client"
 
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -344,3 +345,4 @@ export function CatalogManager({ entity, title, singular }: CatalogManagerProps)
         </section>
     )
 }
+

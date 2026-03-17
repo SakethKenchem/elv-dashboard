@@ -1,3 +1,4 @@
+/* Module: Sales manager item API for plan updates, rename propagation, and cascading delete behavior. */
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"

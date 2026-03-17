@@ -1,3 +1,4 @@
+﻿/* Module: Helper utilities to resolve the authenticated user id for owner-scoped queries. */
 import { authOptions } from "@/auth"
 import { findUserByEmail } from "@/lib/user-store"
 import { getServerSession } from "next-auth"
@@ -19,3 +20,4 @@ export async function getCurrentUserId(): Promise<number | null> {
     const user = await findUserByEmail(email)
     return user?.id ?? null
 }
+

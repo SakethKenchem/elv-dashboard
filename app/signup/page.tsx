@@ -1,3 +1,4 @@
+﻿/* Module: Signup screen for creating new user accounts. */
 import { hash } from "bcryptjs"
 import { createUser, findUserByEmail } from "@/lib/user-store"
 import { headers } from "next/headers"
@@ -220,3 +221,4 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         </main>
     )
 }
+

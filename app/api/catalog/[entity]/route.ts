@@ -1,3 +1,4 @@
+/* Module: Generic catalog collection API for listing and creating entity records (regions, vendors, sales managers). */
 import { NextRequest, NextResponse } from "next/server"
 import { isCatalogEntity } from "@/lib/catalog"
 import { createCatalogItem, listCatalogItems } from "@/lib/catalog-server"

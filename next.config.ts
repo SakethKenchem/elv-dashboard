@@ -1,3 +1,4 @@
+﻿/* Module: Next.js framework configuration for build/runtime features in this dashboard application. */
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -18,3 +19,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+

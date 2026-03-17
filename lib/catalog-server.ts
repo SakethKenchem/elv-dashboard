@@ -1,3 +1,4 @@
+﻿/* Module: Server-side catalog helpers for CRUD operations against region/vendor/manager lookup entities. */
 import { prisma } from "@/lib/prisma"
 import { catalogConfig, type CatalogEntity } from "@/lib/catalog"
 
@@ -252,3 +253,4 @@ export async function deleteCatalogItem(entity: CatalogEntity, ownerId: number, 
 export function getCatalogPageMeta(entity: CatalogEntity) {
     return catalogConfig[entity]
 }
+

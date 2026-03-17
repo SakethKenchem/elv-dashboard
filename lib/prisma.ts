@@ -1,3 +1,4 @@
+﻿/* Module: Prisma client singleton to prevent duplicate client instances across hot reloads. */
 import { PrismaClient } from "../app/generated/prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 

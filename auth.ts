@@ -1,3 +1,4 @@
+﻿/* Module: Central authentication options and providers wiring for NextAuth. */
 import { compare, hash } from "bcryptjs"
 import { resolveAuthSecret } from "@/lib/auth-secret"
 import { countUsers, createUser, findUserByEmail } from "@/lib/user-store"

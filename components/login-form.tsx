@@ -1,3 +1,4 @@
+﻿/* Module: Client login form handling credential submission and auth state feedback. */
 "use client"
 
 import { signIn } from "next-auth/react"
@@ -93,3 +94,4 @@ export function LoginForm({ nextPath }: LoginFormProps) {
         </form>
     )
 }
+

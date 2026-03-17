@@ -1,3 +1,4 @@
+﻿/* Module: Workbook import API that parses sheets, deduplicates rows, and upserts sales + manager plan data. */
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { prisma } from "@/lib/prisma"
@@ -49,6 +50,7 @@ type SalesManagerPlanInput = {
 }
 
 function quarterFromMonth(month: string): 1 | 2 | 3 | 4 {
+    // Infer quarter from the first month label found in the imported sheet.
     const normalized = normalizeMonth(month)
     const index = MONTHS.indexOf(normalized)
     if (index < 3) return 1
@@ -58,6 +60,8 @@ function quarterFromMonth(month: string): 1 | 2 | 3 | 4 {
 }
 
 function mergePlan(base: SalesManagerPlanInput, override: SalesManagerPlanInput): SalesManagerPlanInput {
+    // Uploaded explicit plan data should override derived plan fields when present,
+    // while still preserving non-zero month values already accumulated.
     const mergedTargets = toMonthMap(base.monthlyTargets)
     const mergedAchieved = toMonthMap(base.monthlyAchieved)
     const overrideTargets = toMonthMap(override.monthlyTargets)
@@ -89,6 +93,8 @@ function mergePlan(base: SalesManagerPlanInput, override: SalesManagerPlanInput)
 }
 
 function deriveSalesManagerPlans(records: SalesRecordInput[]): SalesManagerPlanInput[] {
+    // Build manager-level plans from transaction rows so manager hub is populated
+    // even when workbook has only a Master sheet.
     const plans = new Map<string, SalesManagerPlanInput>()
 
     for (const record of records) {
@@ -171,6 +177,7 @@ function normalizeKey(value: string): string {
 }
 
 function getCellValue(row: JsonRow, aliases: string[]): unknown {
+    // Header matching is alias-based to tolerate user-edited workbook labels.
     const normalizedAliases = aliases.map(normalizeKey)
 
     for (const [key, value] of Object.entries(row)) {
@@ -200,6 +207,8 @@ function findHeaderIndex(headers: string[], aliases: string[]): number {
 }
 
 function detectMonthHeaders(row: JsonRow): [string, string, string] {
+    // Prefer headers positioned between MON TGT and Total Achieved;
+    // fallback to JAN/FEB/MAR aliases if order cannot be detected.
     const headers = Object.keys(row)
     const monthTargetIndex = findHeaderIndex(headers, ["MON TGT", "Month Target"])
     const totalAchievedIndex = findHeaderIndex(headers, ["Total Achieved", "TotalAchieved"])
@@ -237,6 +246,7 @@ function detectCommitMonth(row: JsonRow, fallback: string): string {
 }
 
 function buildRecordKey(record: SalesRecordInput): string {
+    // Stable key used for both within-upload and against-DB deduplication.
     return [
         normalizeKey(record.region),
         normalizeKey(record.salesManager),
@@ -365,6 +375,7 @@ export async function POST(req: NextRequest) {
         const month2Name = normalizeMonthLabel(month2Header)
         const month3Name = normalizeMonthLabel(month3Header)
 
+        // Convert loose sheet rows into normalized records and drop invalid rows.
         const mappedRecords = rows
             .map((row): SalesRecordInput | null => {
                 const region = parseText(getCellValue(row, ["Region"]))
@@ -403,6 +414,7 @@ export async function POST(req: NextRequest) {
             })
             .filter((record): record is SalesRecordInput => record !== null)
 
+        // First dedupe pass: remove duplicates inside the same uploaded file.
         const uploadUniqueMap = new Map<string, SalesRecordInput>()
         for (const record of mappedRecords) {
             const key = buildRecordKey(record)
@@ -413,6 +425,7 @@ export async function POST(req: NextRequest) {
 
         const uploadUniqueRecords = Array.from(uploadUniqueMap.values())
 
+        // Second dedupe pass: avoid inserting rows that already exist for this owner.
         const existing = await prisma.salesData.findMany({
             where: { ownerId },
             select: {
@@ -468,6 +481,8 @@ export async function POST(req: NextRequest) {
         const uniqueVendors = [...new Set(mappedRecords.map((record) => sanitizeName(record.vendor)).filter(Boolean))]
         const derivedSalesManagerPlans = deriveSalesManagerPlans(uploadUniqueRecords)
 
+        // Merge derived plans with explicit Sales Manager Plan sheet rows.
+        // Explicit sheet data has precedence for overlapping manager entries.
         const mergedPlansMap = new Map<string, SalesManagerPlanInput>()
         for (const derived of derivedSalesManagerPlans) {
             mergedPlansMap.set(derived.name, derived)
@@ -560,3 +575,4 @@ export async function POST(req: NextRequest) {
         )
     }
 }
+

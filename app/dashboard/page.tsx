@@ -1,3 +1,4 @@
+﻿/* Module: Dashboard landing page that summarizes ELV sales performance and regional rollups. */
 "use client"
 
 import { AppShell } from "@/components/app-shell"
@@ -190,3 +191,4 @@ export default function DashboardPage() {
         </AppShell>
     )
 }
+

@@ -1,3 +1,4 @@
+﻿/* Module: Sales Manager hub UI for creating, editing, deleting, and reviewing manager-level plans and KPIs. */
 "use client"
 
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -117,6 +118,7 @@ export function SalesManagerCrud() {
     const [achievedValueDraft, setAchievedValueDraft] = useState("0")
     const pageSize = 8
 
+    // Safely read API responses even when upstream returns non-JSON error bodies.
     const readApiPayload = async (res: Response): Promise<ApiPayload> => {
         const contentType = res.headers.get("content-type") ?? ""
         if (contentType.toLowerCase().includes("application/json")) {
@@ -151,6 +153,7 @@ export function SalesManagerCrud() {
             }
 
             setItems(payloadItems(payload))
+            // Start from first page after each reload so newly created rows are visible.
             setPage(1)
         } catch (error) {
             setStatus({
@@ -167,10 +170,12 @@ export function SalesManagerCrud() {
     }, [loadItems])
 
     useEffect(() => {
+        // Keep current page valid after deletes or data-size changes.
         const maxPage = Math.max(Math.ceil(items.length / pageSize), 1)
         setPage((current) => Math.min(current, maxPage))
     }, [items.length, pageSize])
 
+    // Live preview metrics in modal before persisting.
     const computed = useMemo(
         () =>
             computeSalesManagerMetrics({
@@ -320,6 +325,7 @@ export function SalesManagerCrud() {
     const totalPages = Math.max(Math.ceil(items.length / pageSize), 1)
     const pageStart = items.length === 0 ? 0 : (page - 1) * pageSize + 1
     const pageEnd = Math.min(page * pageSize, items.length)
+    // Client-side pagination slice for both mobile cards and desktop table.
     const pagedItems = useMemo(() => {
         const start = (page - 1) * pageSize
         return items.slice(start, start + pageSize)
@@ -603,3 +609,4 @@ export function SalesManagerCrud() {
         </section>
     )
 }
+

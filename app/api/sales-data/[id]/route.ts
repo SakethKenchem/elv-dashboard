@@ -1,3 +1,4 @@
+/* Module: Sales row item API for patching/deleting a specific record while preserving catalog consistency. */
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"

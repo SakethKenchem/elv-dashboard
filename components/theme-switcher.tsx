@@ -1,3 +1,4 @@
+﻿/* Module: UI control that toggles and persists light/dark theme preference. */
 "use client"
 
 import { useEffect, useState } from "react"
@@ -36,3 +37,4 @@ export function ThemeSwitcher() {
         </button>
     )
 }
+

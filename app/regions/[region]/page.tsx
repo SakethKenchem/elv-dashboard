@@ -1,3 +1,4 @@
+/* Module: Region drilldown page showing manager/vendor breakdowns and links back into filtered workspaces. */
 import { AppShell } from "@/components/app-shell"
 import Link from "next/link"
 import { notFound } from "next/navigation"

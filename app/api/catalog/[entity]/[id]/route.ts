@@ -1,3 +1,4 @@
+/* Module: Generic catalog item API for updating and deleting a specific entity record by id. */
 import { NextRequest, NextResponse } from "next/server"
 import { isCatalogEntity } from "@/lib/catalog"
 import { deleteCatalogItem, updateCatalogItem } from "@/lib/catalog-server"

@@ -1,3 +1,4 @@
+﻿/* Module: Diagnostic script that inspects ownership mappings to identify orphaned or incorrectly assigned records. */
 import { prisma } from "../lib/prisma"
 
 type CountRow = { count: number }
@@ -135,3 +136,4 @@ main()
     .finally(async () => {
         await prisma.$disconnect()
     })
+

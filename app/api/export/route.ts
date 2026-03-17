@@ -1,3 +1,4 @@
+﻿/* Module: Workbook export API that emits master sales and manager plan sheets. */
 import { NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { prisma } from "@/lib/prisma"
@@ -200,3 +201,4 @@ export async function GET() {
         )
     }
 }
+

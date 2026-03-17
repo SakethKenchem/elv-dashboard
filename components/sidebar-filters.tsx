@@ -1,3 +1,4 @@
+﻿/* Module: Sidebar filter controls used to narrow dashboard datasets by region/manager/vendor context. */
 "use client"
 
 import Link from "next/link"
@@ -174,3 +175,4 @@ export function SidebarFilters() {
         </div>
     )
 }
+

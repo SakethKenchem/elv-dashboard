@@ -1,3 +1,4 @@
+﻿/* Module: Sales data workspace UI for filtering and managing transaction-level rows with derived performance metrics. */
 "use client"
 
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -592,11 +593,11 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
                                 <thead className="bg-[#f4ebdd] text-left text-[#5f523f] dark:bg-slate-800 dark:text-slate-200">
                                     <tr>
                                         <th className="px-4 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => toggleSelectAll(event.target.checked)} /></th>
-                                        <th className="px-4 py-3"><button onClick={() => toggleSort("region")}>Region {sortBy === "region" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                        <th className="px-4 py-3"><button onClick={() => toggleSort("salesManager")}>Sales Manager {sortBy === "salesManager" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                        <th className="px-4 py-3"><button onClick={() => toggleSort("vendor")}>Vendor {sortBy === "vendor" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                        <th className="px-4 py-3"><button onClick={() => toggleSort("quarterTarget")}>Quarter Target {sortBy === "quarterTarget" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                                        <th className="px-4 py-3"><button onClick={() => toggleSort("totalAchieved")}>Achieved {sortBy === "totalAchieved" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("region")}>Region {sortBy === "region" ? (sortDir === "asc" ? "â†‘" : "â†“") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("salesManager")}>Sales Manager {sortBy === "salesManager" ? (sortDir === "asc" ? "â†‘" : "â†“") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("vendor")}>Vendor {sortBy === "vendor" ? (sortDir === "asc" ? "â†‘" : "â†“") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("quarterTarget")}>Quarter Target {sortBy === "quarterTarget" ? (sortDir === "asc" ? "â†‘" : "â†“") : ""}</button></th>
+                                        <th className="px-4 py-3"><button onClick={() => toggleSort("totalAchieved")}>Achieved {sortBy === "totalAchieved" ? (sortDir === "asc" ? "â†‘" : "â†“") : ""}</button></th>
                                         <th className="px-4 py-3">% Achieved</th>
                                         <th className="px-4 py-3">Balance</th>
                                         <th className="px-4 py-3">Actions</th>
@@ -779,3 +780,4 @@ export function SalesDataManager({ initialFilters }: { initialFilters: Filters }
         </section >
     )
 }
+

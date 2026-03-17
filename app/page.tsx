@@ -1,3 +1,4 @@
+﻿/* Module: Root route that redirects users to auth or the main dashboard based on session state. */
 import Link from "next/link"
 export default function LandingPage() {
   return (

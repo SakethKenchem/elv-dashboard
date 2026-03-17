@@ -1,3 +1,4 @@
+﻿/* Module: API endpoint returning current authenticated user profile/session payload. */
 import { authOptions } from "@/auth"
 import { getServerSession } from "next-auth"
 import { NextResponse } from "next/server"

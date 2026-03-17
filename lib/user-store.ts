@@ -1,3 +1,4 @@
+﻿/* Module: User persistence helpers used by auth and ownership logic. */
 import { Pool } from "pg"
 
 type UserRecord = {
@@ -46,3 +47,4 @@ export async function createUser(email: string, passwordHash: string): Promise<U
 
     return result.rows[0]
 }
+

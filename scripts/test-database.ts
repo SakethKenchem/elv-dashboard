@@ -1,3 +1,4 @@
+﻿/* Module: Database connectivity smoke test script that validates Prisma can reach the configured database and run a simple query. */
 import "dotenv/config"
 import { prisma } from "../lib/prisma"
 
@@ -35,3 +36,4 @@ async function testDatabase() {
 }
 
 testDatabase()
+

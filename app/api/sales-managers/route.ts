@@ -1,3 +1,4 @@
+﻿/* Module: API handlers for listing and creating sales manager plans with computed KPI hydration. */
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"
@@ -26,6 +27,7 @@ type SalesManagerPayload = {
 }
 
 function parsePayload(input: unknown): SalesManagerPayload {
+    // Parse/normalize flexible client payload into a strict DB-ready shape.
     const body = (input ?? {}) as Record<string, unknown>
     const name = sanitizeName(body.name)
 
@@ -53,6 +55,8 @@ function parsePayload(input: unknown): SalesManagerPayload {
 }
 
 async function syncManagersFromSalesData(ownerId: number) {
+    // Ensure Sales Manager hub is never empty when sales rows already exist.
+    // This backfills manager master rows from transaction data.
     const rows = await prisma.salesData.findMany({
         where: { ownerId },
         select: { salesManager: true, region: true, vendor: true },
@@ -104,6 +108,7 @@ export async function GET() {
             console.warn("sales-managers sync from sales-data failed; continuing with existing plan rows", syncError)
         }
 
+        // Fetch manager plans and usage counts together for one hydrated response.
         const [items, usageRows] = await Promise.all([
             prisma.salesManager.findMany({
                 where: { ownerId },
@@ -118,6 +123,7 @@ export async function GET() {
 
         const usageMap = new Map(usageRows.map((row) => [row.salesManager, row._count._all]))
 
+        // Compute live KPIs from stored month maps so UI always has derived metrics.
         const hydrated = items.map((item) => {
             const monthlyTargets = toMonthMap(item.monthlyTargets)
             const monthlyAchieved = toMonthMap(item.monthlyAchieved)
@@ -202,3 +208,4 @@ export async function POST(request: NextRequest) {
         )
     }
 }
+

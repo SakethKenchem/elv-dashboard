@@ -1,3 +1,4 @@
+﻿/* Module: Request middleware/proxy guard that applies auth/session checks before protected routes are served. */
 import { resolveAuthSecret } from "@/lib/auth-secret"
 import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
@@ -42,3 +43,4 @@ export default async function middleware(req: NextRequest) {
 export const config = {
     matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)"],
 }
+

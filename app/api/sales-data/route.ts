@@ -1,3 +1,4 @@
+﻿/* Module: API handlers for paginated sales row listing, creation, and bulk deletion. */
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUserId } from "@/lib/current-user"
@@ -42,6 +43,7 @@ function getSortDirection(value: string | null): SortDirection {
 }
 
 function parsePayload(input: unknown): SalesPayload {
+    // Normalize incoming payload from UI/form into typed values used by DB logic.
     const body = (input ?? {}) as Record<string, unknown>
     const payload: SalesPayload = {
         region: sanitizeName(body.region),
@@ -65,6 +67,8 @@ function parsePayload(input: unknown): SalesPayload {
 }
 
 function buildPersistenceData(payload: SalesPayload) {
+    // Keep both new JSON month maps and legacy flat month columns in sync.
+    // This preserves compatibility with import/export sheets and older reads.
     const quarter = normalizeQuarter(payload.selectedQuarter)
     const quarterMonthNames = quarterMonths(quarter)
     const metrics = computeSalesManagerMetrics({
@@ -107,6 +111,7 @@ function buildMonthlyAchievedMap(row: {
     feb: number | null
     mar: number | null
 }): MonthMap {
+    // Prefer JSON month map; if absent, reconstruct from legacy month1/2/3 + jan/feb/mar fields.
     const monthlyAchieved = toMonthMap(row.monthlyAchieved)
     const fallbackValues = [
         { name: normalizeMonth(row.month1Name), value: Number(row.jan ?? 0) },
@@ -174,6 +179,7 @@ export async function GET(request: NextRequest) {
         } : {}),
     }
 
+    // Query page rows + totals in parallel for responsive table rendering.
     const [rows, totalCount, aggregate] = await Promise.all([
         prisma.salesData.findMany({
             where,
@@ -194,6 +200,7 @@ export async function GET(request: NextRequest) {
         }),
     ])
 
+    // Attach derived row KPIs used by cards/tables without re-computing on the client.
     const rowsWithMetrics = rows.map((row) => {
         const monthlyAchieved = buildMonthlyAchievedMap(row)
         const metrics = computeSalesManagerMetrics({
@@ -278,3 +285,4 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "Failed to delete selected rows" }, { status: 400 })
     }
 }
+

@@ -1,3 +1,4 @@
+﻿/* Module: Shared metric utilities for month/quarter normalization and sales manager KPI computations. */
 export const MONTHS = [
     "JANUARY",
     "FEBRUARY",
@@ -24,6 +25,7 @@ const quarterMonthMap: Record<number, MonthName[]> = {
 }
 
 export function normalizeQuarter(value: unknown): 1 | 2 | 3 | 4 {
+    // Accept unknown input from API/UI and coerce to a safe quarter value.
     const parsed = Number(value)
     if (parsed === 2 || parsed === 3 || parsed === 4) {
         return parsed
@@ -32,6 +34,7 @@ export function normalizeQuarter(value: unknown): 1 | 2 | 3 | 4 {
 }
 
 export function normalizeMonth(value: unknown): MonthName {
+    // Import files may use short or long month labels; normalize both forms.
     const normalized = String(value ?? "").trim().toUpperCase()
     const aliases: Record<string, MonthName> = {
         JAN: "JANUARY",
@@ -69,6 +72,7 @@ function toNumber(value: unknown): number {
 }
 
 export function toMonthMap(value: unknown): MonthMap {
+    // Always return a full 12-month map so downstream math never sees missing keys.
     const base = Object.fromEntries(MONTHS.map((month) => [month, 0])) as MonthMap
 
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -98,6 +102,7 @@ export function computeSalesManagerMetrics(input: {
     quarterTarget: number
     monthlyAchieved: MonthMap
 }) {
+    // Quarter KPIs are derived from month-wise achieved values, not from legacy flat columns.
     const selectedQuarter = normalizeQuarter(input.selectedQuarter)
     const quarterTarget = toNumber(input.quarterTarget)
     const totalAchieved = sumMonthMap(input.monthlyAchieved)
@@ -125,3 +130,4 @@ export function sanitizeName(value: unknown): string {
 export function sanitizeNumber(value: unknown): number {
     return toNumber(value)
 }
+

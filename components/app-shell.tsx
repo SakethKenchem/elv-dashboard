@@ -1,3 +1,4 @@
+﻿/* Module: Main layout shell containing navigation, header, and shared page scaffolding. */
 import { SidebarFilters } from "./sidebar-filters"
 import { SignOutButton } from "./sign-out-button"
 import Link from "next/link"
@@ -62,7 +63,7 @@ export function AppShell({
                                         }`}
                                 >
                                     <span>{item.label}</span>
-                                    <span className={isActive ? "text-white/75" : "text-[#9d8a72] dark:text-slate-400"}>›</span>
+                                    <span className={isActive ? "text-white/75" : "text-[#9d8a72] dark:text-slate-400"}>â€º</span>
                                 </Link>
                             )
                         })}
@@ -90,3 +91,4 @@ export function AppShell({
         </main>
     )
 }
+

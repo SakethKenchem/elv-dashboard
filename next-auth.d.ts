@@ -1,3 +1,4 @@
+﻿/* Module: Type augmentation for NextAuth session/user objects used across the app. */
 import type { DefaultSession } from "next-auth"
 import type { JWT as DefaultJWT } from "next-auth/jwt"
 

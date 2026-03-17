@@ -1,3 +1,4 @@
+﻿/* Module: Reusable confirmation dialog used before destructive actions. */
 "use client"
 
 type ConfirmDialogProps = {
@@ -59,3 +60,4 @@ export function ConfirmDialog({
         </div>
     )
 }
+

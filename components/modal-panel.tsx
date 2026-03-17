@@ -1,3 +1,4 @@
+﻿/* Module: Generic modal panel wrapper for form-driven create/edit workflows. */
 "use client"
 
 import type { ReactNode } from "react"
@@ -36,3 +37,4 @@ export function ModalPanel({ open, title, description, children, onClose }: Moda
         </div>
     )
 }
+

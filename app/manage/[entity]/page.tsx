@@ -1,3 +1,4 @@
+/* Module: Dynamic management page that routes each catalog entity to its corresponding CRUD interface. */
 import { AppShell } from "../../../components/app-shell"
 import { CatalogManager } from "../../../components/catalog-manager"
 import { catalogConfig, isCatalogEntity } from "@/lib/catalog"

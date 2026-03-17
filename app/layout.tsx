@@ -1,3 +1,4 @@
+﻿/* Module: Root app layout applying global styles and top-level providers. */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -37,3 +38,4 @@ export default function RootLayout({
     </html>
   );
 }
+

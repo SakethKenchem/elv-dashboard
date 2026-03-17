@@ -1,3 +1,4 @@
+﻿/* Module: Runtime helper for loading and validating authentication secret configuration. */
 const FALLBACK_DEV_SECRET = "dev-insecure-auth-secret-change-me"
 
 export function resolveAuthSecret(): string {
@@ -13,3 +14,4 @@ export function resolveAuthSecret(): string {
 
     return FALLBACK_DEV_SECRET
 }
+

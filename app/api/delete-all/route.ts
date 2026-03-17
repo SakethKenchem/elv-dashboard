@@ -1,3 +1,4 @@
+﻿/* Module: Administrative endpoint for clearing owner-scoped data sets. */
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { getCurrentUserId } from "@/lib/current-user"
