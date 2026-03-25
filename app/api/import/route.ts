@@ -173,7 +173,11 @@ function parseText(value: unknown): string {
 }
 
 function normalizeKey(value: string): string {
-    return value.trim().toLowerCase().replace(/\s+/g, " ")
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/\s+/g, " ")
 }
 
 function getCellValue(row: JsonRow, aliases: string[]): unknown {
@@ -210,8 +214,8 @@ function detectMonthHeaders(row: JsonRow): [string, string, string] {
     // Prefer headers positioned between MON TGT and Total Achieved;
     // fallback to JAN/FEB/MAR aliases if order cannot be detected.
     const headers = Object.keys(row)
-    const monthTargetIndex = findHeaderIndex(headers, ["MON TGT", "Month Target"])
-    const totalAchievedIndex = findHeaderIndex(headers, ["Total Achieved", "TotalAchieved"])
+    const monthTargetIndex = findHeaderIndex(headers, ["MON TGT", "Month Target", "Monthly Target"])
+    const totalAchievedIndex = findHeaderIndex(headers, ["Total Achieved", "TotalAchieved", "Total Achvd"])
 
     if (monthTargetIndex !== -1 && totalAchievedIndex > monthTargetIndex + 1) {
         const between = headers.slice(monthTargetIndex + 1, totalAchievedIndex).filter((value) => normalizeKey(value) !== "")
@@ -232,7 +236,7 @@ function normalizeMonthLabel(value: string): string {
 }
 
 function detectCommitMonth(row: JsonRow, fallback: string): string {
-    const commitHeader = getCellKey(row, ["Commit - MAR", "Commit MAR", "Commit"])
+    const commitHeader = getCellKey(row, ["Commit - MAR", "Commit MAR", "Commit", "Commitment"])
     if (!commitHeader) {
         return fallback
     }
@@ -283,7 +287,16 @@ function parseSalesManagerPlans(rows: JsonRow[]): SalesManagerPlanInput[] {
 
     for (const row of rows) {
         const name = sanitizeName(
-            getCellValue(row, ["Name", "Sales Manager", "SalesManager", "Sales Manager Name", "Manager"])
+            getCellValue(row, [
+                "Name",
+                "Sales Manager",
+                "SalesManager",
+                "Sales Manager Name",
+                "Manager",
+                "CAM",
+                "C A M",
+                "Account Manager",
+            ])
         )
         if (!name) {
             continue
@@ -380,12 +393,21 @@ export async function POST(req: NextRequest) {
             .map((row): SalesRecordInput | null => {
                 const region = parseText(getCellValue(row, ["Region"]))
                 const salesManager = parseText(
-                    getCellValue(row, ["Sales Manager", "SalesManager", "Sales Managers", "Manager"])
+                    getCellValue(row, [
+                        "Sales Manager",
+                        "SalesManager",
+                        "Sales Managers",
+                        "Manager",
+                        "CAM",
+                        "C A M",
+                        "Account Manager",
+                        "Customer Account Manager",
+                    ])
                 )
-                const vendor = parseText(getCellValue(row, ["Vendor", "Vendors"]))
+                const vendor = parseText(getCellValue(row, ["Vendor", "Vendors", "Supplier"]))
                 const commitHeaderKey =
-                    getCellKey(row, ["Commit - MAR", "Commit MAR", "Commit"]) ??
-                    Object.keys(row).find((key) => normalizeKey(key).startsWith("commit -")) ??
+                    getCellKey(row, ["Commit - MAR", "Commit MAR", "Commit", "Commitment"]) ??
+                    Object.keys(row).find((key) => normalizeKey(key).startsWith("commit")) ??
                     null
 
                 if (!region || !salesManager || !vendor) {
@@ -405,7 +427,7 @@ export async function POST(req: NextRequest) {
                     jan: parseNumber(row[month1Header]),
                     feb: parseNumber(row[month2Header]),
                     mar: parseNumber(row[month3Header]),
-                    totalAchieved: parseNumber(getCellValue(row, ["Total Achieved", "TotalAchieved"])),
+                    totalAchieved: parseNumber(getCellValue(row, ["Total Achieved", "TotalAchieved", "Total Achvd"])),
                     commitMonth: detectCommitMonth(row, month3Name),
                     commitMar: parseNumber(commitHeaderKey ? row[commitHeaderKey] : null),
                     percentQ1: parseNumber(getCellValue(row, ["%Achvd Q1", "% Achvd Q1", "Percent Q1"])),
@@ -413,6 +435,17 @@ export async function POST(req: NextRequest) {
                 }
             })
             .filter((record): record is SalesRecordInput => record !== null)
+
+        if (mappedRecords.length === 0) {
+            return NextResponse.json(
+                {
+                    error: "No valid rows found in uploaded sheet",
+                    details:
+                        "Required columns include Region, CAM or Sales Manager, Vendor, YR TGT, QTR TGT, MON TGT, month achieved columns, and commit/coverage columns.",
+                },
+                { status: 400 }
+            )
+        }
 
         // First dedupe pass: remove duplicates inside the same uploaded file.
         const uploadUniqueMap = new Map<string, SalesRecordInput>()
