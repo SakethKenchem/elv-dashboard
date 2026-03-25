@@ -95,12 +95,16 @@ async function syncManagersFromSalesData(ownerId: number) {
     )
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const ownerId = await getCurrentUserId()
         if (!ownerId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
+
+        const searchParams = request.nextUrl.searchParams
+        const regionFilter = sanitizeName(searchParams.get("region"))
+        const managerWhere = regionFilter ? { ownerId, region: regionFilter } : { ownerId }
 
         try {
             await syncManagersFromSalesData(ownerId)
@@ -111,7 +115,7 @@ export async function GET() {
         // Fetch manager plans and usage counts together for one hydrated response.
         const [items, usageRows] = await Promise.all([
             prisma.salesManager.findMany({
-                where: { ownerId },
+                where: managerWhere,
                 orderBy: { name: "asc" },
             }),
             prisma.salesData.groupBy({

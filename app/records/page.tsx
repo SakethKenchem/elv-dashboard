@@ -7,7 +7,8 @@ type RecordsPageProps = {
 }
 
 export default async function RecordsPage({ searchParams: _searchParams }: RecordsPageProps) {
-    await _searchParams
+    const params = await _searchParams
+    const initialRegion = typeof params.region === "string" ? params.region : ""
 
     return (
         <AppShell
@@ -16,7 +17,7 @@ export default async function RecordsPage({ searchParams: _searchParams }: Recor
             title="Sales Manager Hub"
             description="One place for each sales manager plan, targets, commitments, achievements, and linked sales performance."
         >
-            <SalesManagerCrud />
+            <SalesManagerCrud initialRegion={initialRegion} />
         </AppShell>
     )
 }

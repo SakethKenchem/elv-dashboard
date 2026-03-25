@@ -102,8 +102,9 @@ function toForm(item: SalesManagerItem): SalesManagerForm {
     }
 }
 
-export function SalesManagerCrud() {
+export function SalesManagerCrud({ initialRegion = "" }: { initialRegion?: string }) {
     const [items, setItems] = useState<SalesManagerItem[]>([])
+    const [regionFilter, setRegionFilter] = useState(initialRegion)
     const [page, setPage] = useState(1)
     const [loading, setLoading] = useState(true)
     const [status, setStatus] = useState<Status>(null)
@@ -145,7 +146,12 @@ export function SalesManagerCrud() {
     const loadItems = useCallback(async () => {
         try {
             setLoading(true)
-            const res = await fetch("/api/sales-managers")
+            const params = new URLSearchParams()
+            if (regionFilter.trim()) {
+                params.set("region", regionFilter.trim())
+            }
+            const endpoint = params.toString() ? `/api/sales-managers?${params.toString()}` : "/api/sales-managers"
+            const res = await fetch(endpoint)
             const payload = await readApiPayload(res)
 
             if (!res.ok) {
@@ -163,11 +169,15 @@ export function SalesManagerCrud() {
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [regionFilter])
 
     useEffect(() => {
         loadItems()
     }, [loadItems])
+
+    useEffect(() => {
+        setRegionFilter(initialRegion)
+    }, [initialRegion])
 
     useEffect(() => {
         // Keep current page valid after deletes or data-size changes.
@@ -340,10 +350,25 @@ export function SalesManagerCrud() {
                         <p className="mt-1 text-sm text-[#6a5b47] dark:text-slate-300">
                             Manage yearly, quarterly, monthly, month-wise targets, commitments, and quarter balance in one place.
                         </p>
+                        {regionFilter ? (
+                            <p className="mt-2 text-xs font-medium uppercase tracking-[0.08em] text-[#7a6a52] dark:text-slate-400">
+                                Filtered by region: {regionFilter}
+                            </p>
+                        ) : null}
                     </div>
-                    <button onClick={openCreate} className="rounded-xl bg-[#2c7a58] px-5 py-3 font-semibold text-white transition hover:bg-[#235f45]">
-                        New Sales Manager Plan
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {regionFilter ? (
+                            <button
+                                onClick={() => setRegionFilter("")}
+                                className="rounded-xl border border-[#d6c7ae] px-4 py-3 text-sm font-semibold text-[#4f4333] transition hover:bg-[#f4ebdd] dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                                Show All Regions
+                            </button>
+                        ) : null}
+                        <button onClick={openCreate} className="rounded-xl bg-[#2c7a58] px-5 py-3 font-semibold text-white transition hover:bg-[#235f45]">
+                            New Sales Manager Plan
+                        </button>
+                    </div>
                 </div>
 
                 {status ? (
